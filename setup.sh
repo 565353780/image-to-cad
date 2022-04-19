@@ -3,12 +3,13 @@ conda create -n roca python=3.8 -y
 conda activate roca
 
 # Simple deps
-pip install dataclasses opencv-python numpy-quaternion pandas scipy trimesh rtree numba
+pip install \
+  dataclasses opencv-python numpy-quaternion pandas scipy trimesh rtree numba
 
 pip install open3d==0.13.0
 
+pip install fvcore iopath
 # pytorch3d
-conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y
 conda install -c bottler nvidiacub -y
 # NOTE: Tested with 0.5 and 0.6
 conda install pytorch3d -c pytorch3d-nightly -y
