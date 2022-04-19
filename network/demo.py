@@ -10,7 +10,6 @@ from trimesh.util import concatenate as stack_meshes
 
 from roca.engine import Predictor
 
-
 def main(args):
     predictor = Predictor(
         data_dir=args.data_dir,

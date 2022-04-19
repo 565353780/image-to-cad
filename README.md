@@ -28,8 +28,20 @@ ln -s <path-to-Data-folder> ./Data
 ## Install
 
 ```
-https://github.com/cangumeli/Scan2CADRasterizer
-source setup.sh
+conda create -n roca python=3.8
+conda activate roca
+
+git clone --recursive https://github.com/cangumeli/Scan2CADRasterizer.git
+cd Scan2CADRasterizer
+pip install .
+cd ..
+
+pip install dataclasses opencv-python numpy-quaternion pandas scipy==1.7.2 open3d==0.13.0 trimesh rtree fvcore iopath pytorch3d numba
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+python -m pip install detectron2 -f \
+  https://dl.fbaipublicfiles.com/detectron2/wheels/cu113/torch1.10/index.html
+
+pip install nvidiacub
 ```
 
 ## Run
