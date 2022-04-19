@@ -16,6 +16,8 @@ unzip
 
 ```bash
 Data/Dataset.zip
+Data/Images.zip
+Data/Rendering.zip
 ```
 
 and create a link
