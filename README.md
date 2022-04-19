@@ -39,10 +39,11 @@ source setup.sh
 conda create -n roca python=3.8 -y
 conda activate roca
 
+cd ..
 git clone --recursive https://github.com/cangumeli/Scan2CADRasterizer.git
 cd Scan2CADRasterizer
 pip install .
-cd ..
+cd ../image-to-cad
 
 pip install dataclasses opencv-python numpy-quaternion \
   pandas scipy trimesh rtree numba open3d==0.13.0
