@@ -6,15 +6,17 @@ conda activate roca
 pip install -r requirements.txt
 
 # pytorch3d
-conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=11.1 -c pytorch -c conda-forge -y
 conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y
 conda install -c bottler nvidiacub -y
 # NOTE: Tested with 0.5 and 0.6
 conda install pytorch3d -c pytorch3d-nightly -y
 
+# pytorch
+pip install torch==1.7.0+cu110 torchvision==0.8.1+cu110 torchaudio==0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
+
 # detectron2
-python -m pip install detectron2==0.4+cu111 -f \
-  https://dl.fbaipublicfiles.com/detectron2/wheels/cu111/torch1.8/index.html -y
+python -m pip install detectron2==0.3+cu110 -f \
+  https://dl.fbaipublicfiles.com/detectron2/wheels/cu110/torch1.7/index.html
 
 # numba
 pip install numba
