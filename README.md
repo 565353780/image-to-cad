@@ -36,12 +36,8 @@ cd Scan2CADRasterizer
 pip install .
 cd ..
 
-pip install dataclasses opencv-python numpy-quaternion pandas scipy==1.7.2 open3d==0.13.0 trimesh rtree fvcore iopath pytorch3d numba
-pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
-python -m pip install detectron2 -f \
-  https://dl.fbaipublicfiles.com/detectron2/wheels/cu113/torch1.10/index.html
-
-pip install nvidiacub
+cd image-to-cad
+source setup.sh
 ```
 
 ## Run
