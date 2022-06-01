@@ -66,7 +66,7 @@ python -m pip install detectron2==0.3+cu110 -f \
 ```bash
 conda activate roca
 cd network
-python demo.py --model_path ../Models/model_best.pth --data_dir ../Data/Dataset --config_path ../Models/config.yaml
+python demo.py --model_path ../Models/model_best.pth --data_dir ../Data/Dataset/ --config_path ../Models/config.yaml
 ```
 
 ## Enjoy it~

@@ -12,7 +12,7 @@ from trimesh.util import concatenate as stack_meshes
 from roca.engine import Predictor
 
 def demo():
-    data_dir = "../Data/Dataset"
+    data_dir = "../Data/Dataset/"
     model_path = "../Models/model_best.pth"
     config_path = "../Models/config.yaml"
     wild = False
@@ -47,7 +47,6 @@ def demo():
             excluded_classes={'table'} if wild else (),
             as_open3d=not to_file
         )
-        return
 
         if to_file:
             os.makedirs(output_dir, exist_ok=True)
@@ -60,19 +59,17 @@ def demo():
                 0.8 * rendering[mask] * 255 + 0.2 * overlay[mask], 0, 255
             ).astype(np.uint8)
             if to_file:
-                Image.fromarray(overlay).save(
-                    os.path.join(output_dir, 'overlay_{}.jpg'.format(name))
-                )
+                Image.fromarray(overlay).save(output_dir + 'overlay_' + name + '.jpg')
             else:
                 img = o3d.geometry.Image(overlay)
                 o3d.visualization.draw_geometries([img], height=480, width=640)
 
         if to_file:
-            out_file = os.path.join(output_dir, 'mesh_{}.ply'.format(name))
+            out_file = output_dir + 'mesh_' + name + '.ply'
             export_mesh(stack_meshes(meshes), out_file, file_type='ply')
         else:
             o3d.visualization.draw_geometries(meshes)
-
+    return True
 
 if __name__ == '__main__':
     demo()

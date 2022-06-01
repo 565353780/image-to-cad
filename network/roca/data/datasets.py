@@ -17,20 +17,18 @@ def register_scan2cad(
     split: str,
     class_freq_method: str = 'none'
 ):
-    json_file = os.path.join(
-        data_dir, 'scan2cad_instances_{}.json'.format(split)
-    )
-    cad_file = os.path.join(data_dir, 'scan2cad_{}_cads.pkl'.format(split))
-    category_file = os.path.join(data_dir, 'scan2cad_alignment_classes.json')
-    point_file = os.path.join(data_dir, 'points_{}.pkl'.format(split))
+    json_file = data_dir + 'scan2cad_instances_' + split + '.json'
+    cad_file = data_dir + 'scan2cad_' + split + '_cads.pkl'
+    category_file = data_dir + 'scan2cad_alignment_classes.json'
+    point_file = data_dir + 'points_' + split + '.pkl'
     if not os.path.isfile(point_file):
         point_file = None if split == 'train' else 'assets/points_val.pkl'
-    grid_file = os.path.join(data_dir, '{}_grids_32.pkl'.format(split))
+    grid_file = data_dir + split + '_grids_32.pkl'
 
     # TODO: may need a train scenes in the future
     scene_file = None
     if split == 'val':
-        scene_file = os.path.join(data_dir, 'scan2cad_val_scenes.json')
+        scene_file = data_dir + 'scan2cad_val_scenes.json'
 
     extra_keys = ['t', 'q', 's', 'intrinsics', 'alignment_id', 'model', 'id']
     DatasetCatalog.register(
