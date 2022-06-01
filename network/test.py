@@ -22,8 +22,16 @@ def demo():
     predictor = Predictor(data_dir, model_path, config_path, thresh, wild)
     to_file = output_dir != 'none'
 
-    for name, scene in zip(('3m', 'sofa', 'lab', 'desk'),
-                           ('scene0474_02', 'scene0207_00', 'scene0378_02', 'scene0474_02')):
+    scene_name_dict = {
+        '3m': 'scene0474_02',
+        'sofa': 'scene0207_00',
+        'lab': 'scene0378_02',
+        'desk': 'scene0474_02'
+    }
+
+    for name in scene_name_dict.keys():
+        scene = scene_name_dict[name]
+
         img = Image.open(os.path.join('assets', '{}.jpg'.format(name)))
         img = np.asarray(img)
         instances, cad_ids = predictor(img, scene=scene)
@@ -31,12 +39,12 @@ def demo():
             instances,
             cad_ids,
             # Table works poorly in the wild case due to size diversity
-            excluded_classes={'table'} if args.wild else (),
+            excluded_classes={'table'} if wild else (),
             as_open3d=not to_file
         )
 
         if to_file:
-            os.makedirs(args.output_dir, exist_ok=True)
+            os.makedirs(output_dir, exist_ok=True)
 
         if predictor.can_render:
             rendering, ids = predictor.render_meshes(meshes)
@@ -47,14 +55,14 @@ def demo():
             ).astype(np.uint8)
             if to_file:
                 Image.fromarray(overlay).save(
-                    os.path.join(args.output_dir, 'overlay_{}.jpg'.format(name))
+                    os.path.join(output_dir, 'overlay_{}.jpg'.format(name))
                 )
             else:
                 img = o3d.geometry.Image(overlay)
                 o3d.visualization.draw_geometries([img], height=480, width=640)
 
         if to_file:
-            out_file = os.path.join(args.output_dir, 'mesh_{}.ply'.format(name))
+            out_file = os.path.join(output_dir, 'mesh_{}.ply'.format(name))
             export_mesh(stack_meshes(meshes), out_file, file_type='ply')
         else:
             o3d.visualization.draw_geometries(meshes)
