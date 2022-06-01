@@ -121,13 +121,10 @@ class CADManager:
                 if verbose:
                     print('Dummy used for {}'.format(key))
                 return self.dummy_model
-            else:
-                raise CADManager.NoCADError('Model {} not found'.format(key))
-        else:
-            if use_dummy:
-                return self._data[category_id].get(key, self.dummy_model)
-            else:
-                return self._data[category_id][key]
+            raise CADManager.NoCADError('Model {} not found'.format(key))
+        if use_dummy:
+            return self._data[category_id].get(key, self.dummy_model)
+        return self._data[category_id][key]
 
     def models_by_category(
         self,

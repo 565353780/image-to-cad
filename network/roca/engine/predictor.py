@@ -129,7 +129,7 @@ class Predictor:
                 instances.scores[i].item(),
             ))
 
-            mesh = self.cad_manager.model_by_id(*cad_ids[i])
+            mesh = self.cad_manager.model_by_id(*cad_ids[i], verbose=True)
             mesh = trimesh.Trimesh(
                 vertices=mesh.verts_list()[0].numpy(),
                 faces=mesh.faces_list()[0].numpy()
