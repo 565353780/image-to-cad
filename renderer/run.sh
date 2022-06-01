@@ -31,3 +31,4 @@ python create_cad_db.py \
     --data_dir $DATA_DIR
  
 python voxelize_cads.py $DATA_DIR
+

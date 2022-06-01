@@ -1,7 +1,7 @@
 # A shared data folder is assumed for all datasets
 # You can modify the vatiables 
 # so different things can be stored in different places
-export BASE_DIR=$HOME/Data
+export BASE_DIR=../Data
 
 # ScanNet25k data downloadable as a zip using the official script
 export SCANNET25K_DIR=$BASE_DIR/ScanNet25k
@@ -23,3 +23,4 @@ export SHAPENET_DIR=$BASE_DIR/ShapeNetCore.v2
 
 export NUM_WORKERS=8  # multi-processing is very important for the speeds of resize and render scripts
 export OMP_NUM_THREADS=1  # OMP is useless since we use multi-processing
+
