@@ -101,14 +101,13 @@ class CADManager:
                 self._grids[category_by_catid[catid]][(catid, id)] = grid
             self._grids = dict(self._grids)
 
-    def model_by_id(
-        self,
-        catid: str,
-        id: str,
-        category_id: int = None,
-        use_dummy: bool = False,
-        verbose: bool = False
-    ) -> Meshes:
+    def model_by_id(self,
+                    catid: str,
+                    id: str,
+                    category_id: int = None,
+                    use_dummy: bool = False,
+                    verbose: bool = False) -> \
+            Meshes:
         key = (catid, id)
         if category_id is None:
             for d in self._data.values():

@@ -85,13 +85,11 @@ class Predictor:
         return Rasterizer is not None
 
     @torch.no_grad()
-    def __call__(
-        self,
-        image_rgb: np.ndarray,
-        f: Union[np.ndarray, float] = 435.,
-        scene: str = 'scene0474_02'
-    ) -> Tuple[Instances, List[Tuple[str, str]]]:
-
+    def __call__(self,
+                 image_rgb: np.ndarray,
+                 f: Union[np.ndarray, float] = 435.,
+                 scene: str = 'scene0474_02') -> \
+            Tuple[Instances, List[Tuple[str, str]]]:
         inputs = {'scene': scene}
         inputs['image'] = torch.as_tensor(
             np.ascontiguousarray(image_rgb[:, :, ::-1].transpose(2, 0, 1))
@@ -108,16 +106,14 @@ class Predictor:
         cad_ids = outputs['wild_cad_ids'] if self.wild else outputs['cad_ids']
         return outputs['instances'].to('cpu'), cad_ids
 
-    def output_to_mesh(
-        self,
-        instances: Instances,
-        cad_ids: List[Tuple[str, str]],
-        min_dist_3d: float = 0.4,
-        excluded_classes: Iterable[str] = (),
-        nms_3d: bool = True,
-        as_open3d: bool = False
-    ) -> Union[List[trimesh.Trimesh], List[Any]]:
-
+    def output_to_mesh(self,
+                       instances: Instances,
+                       cad_ids: List[Tuple[str, str]],
+                       min_dist_3d: float = 0.4,
+                       excluded_classes: Iterable[str] = (),
+                       nms_3d: bool = True,
+                       as_open3d: bool = False) -> \
+            Union[List[trimesh.Trimesh], List[Any]]:
         meshes = []
         trans_cls_scores = []
         for i in range(len(instances)):

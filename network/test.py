@@ -14,27 +14,32 @@ from roca.engine import Predictor
 def demo():
     data_dir = "../Data/Dataset"
     model_path = "../Models/model_best.pth"
-    thresh = 0.5
     config_path = "../Models/config.yaml"
     wild = False
     output_dir = 'none'
 
-    predictor = Predictor(data_dir, model_path, config_path, thresh, wild)
+    predictor = Predictor(data_dir, model_path, config_path, wild=wild)
     to_file = output_dir != 'none'
 
     scene_name_dict = {
         '3m': 'scene0474_02',
         'sofa': 'scene0207_00',
         'lab': 'scene0378_02',
-        'desk': 'scene0474_02'
+        'desk': 'scene0474_02',
+    }
+    scene_name_dict = {
+        #  'desk': 'scene0378_02',
+        'desk': 'scene0474_02',
     }
 
     for name in scene_name_dict.keys():
         scene = scene_name_dict[name]
 
-        img = Image.open(os.path.join('assets', '{}.jpg'.format(name)))
+        img = Image.open('assets/' + name + ".jpg")
         img = np.asarray(img)
         instances, cad_ids = predictor(img, scene=scene)
+        print("==========")
+        print(cad_ids)
         meshes = predictor.output_to_mesh(
             instances,
             cad_ids,
@@ -42,6 +47,7 @@ def demo():
             excluded_classes={'table'} if wild else (),
             as_open3d=not to_file
         )
+        return
 
         if to_file:
             os.makedirs(output_dir, exist_ok=True)
