@@ -162,7 +162,6 @@ class Predictor:
             meshes.append(cam)
         else:
             meshes.append(self._camera_mesh)
-
         return meshes
 
     def render_meshes(

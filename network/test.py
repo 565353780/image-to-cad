@@ -41,12 +41,9 @@ def demo():
         print("==========")
         print(cad_ids)
         meshes = predictor.output_to_mesh(
-            instances,
-            cad_ids,
-            # Table works poorly in the wild case due to size diversity
+            instances, cad_ids,
             excluded_classes={'table'} if wild else (),
-            as_open3d=not to_file
-        )
+            as_open3d=not to_file)
 
         if to_file:
             os.makedirs(output_dir, exist_ok=True)

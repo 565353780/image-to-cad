@@ -55,13 +55,13 @@ class AlignmentHead(nn.Module):
         shared_net = SharedMLP(
             input_size,
             hidden_size=shape_code_size,
-            num_hiddens=2
-        )
+            num_hiddens=2)
+
         global_net = MLP(
             shared_net.out_channels,
             hidden_size=shape_code_size,
-            num_hiddens=2
-        )
+            num_hiddens=2)
+
         self.shape_encoder = Aggregator(shared_net, global_net)
         self.shape_code_drop = nn.Dropout(0.3)
 
@@ -69,8 +69,7 @@ class AlignmentHead(nn.Module):
         self.scale_head = MLP(
             shape_code_size,
             3 * self.num_classes,
-            num_hiddens=2
-        )
+            num_hiddens=2)
 
         # Init translation head
         self.per_category_trans = cfg.MODEL.ROI_HEADS.PER_CATEGORY_TRANS
@@ -78,8 +77,7 @@ class AlignmentHead(nn.Module):
         self.trans_head = MLP(
             3 + shape_code_size,
             3 * (self.num_classes if self.per_category_trans else 1),
-            num_hiddens=1
-        )
+            num_hiddens=1)
 
         self.e2e = cfg.MODEL.ROI_HEADS.E2E
         self.use_noc_embedding = cfg.MODEL.ROI_HEADS.NOC_EMBED
@@ -100,8 +98,8 @@ class AlignmentHead(nn.Module):
         noc_output_size = (
             3 * self.num_classes
             if self.per_category_noc
-            else 3
-        )
+            else 3)
+
         self.noc_head = SharedMLP(
             noc_code_size,
             num_hiddens=2,
