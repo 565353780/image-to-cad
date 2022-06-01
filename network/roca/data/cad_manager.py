@@ -109,22 +109,27 @@ class CADManager:
                     verbose: bool = False) -> \
             Meshes:
         key = (catid, id)
-        if category_id is None:
-            for d in self._data.values():
-                if key in d:
-                    # FIXME: this is hacky!
-                    result = d[key]
-                    if isinstance(result, list):
-                        return result[0]
-                    return result
+
+        if category_id is not None:
             if use_dummy:
-                if verbose:
-                    print('Dummy used for {}'.format(key))
-                return self.dummy_model
-            raise CADManager.NoCADError('Model {} not found'.format(key))
+                return self._data[category_id].get(key, self.dummy_model)
+            return self._data[category_id][key]
+
+        for d in self._data.values():
+            if key not in d:
+                continue
+
+            # FIXME: this is hacky!
+            result = d[key]
+            if isinstance(result, list):
+                return result[0]
+            return result
+
         if use_dummy:
-            return self._data[category_id].get(key, self.dummy_model)
-        return self._data[category_id][key]
+            if verbose:
+                print('Dummy used for {}'.format(key))
+            return self.dummy_model
+        raise CADManager.NoCADError('Model {} not found'.format(key))
 
     def models_by_category(
         self,
