@@ -2,10 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
-
-sys.path.append("./habitat_sim_manage/")
-
 import numpy as np
 import open3d as o3d
 from PIL import Image
@@ -14,13 +10,10 @@ from trimesh.util import concatenate as stack_meshes
 
 from roca.engine import Predictor
 
-from habitat_sim_manage.Module.sim_manager import SimManager
-
-class SimCADDetector(object):
+class ROCADetector(object):
     def __init__(self):
         self.predictor = None
         self.to_file = None
-        self.sim_manager = SimManager()
 
         self.image = None
         self.scene_name = None
@@ -34,7 +27,6 @@ class SimCADDetector(object):
     def reset(self):
         self.predictor = None
         self.to_file = None
-        self.sim_manager.reset()
 
         self.image = None
         self.scene_name = None
@@ -45,7 +37,7 @@ class SimCADDetector(object):
         self.save_idx = 0
         return True
 
-    def loadROCASettings(self, roca_settings):
+    def loadSettings(self, roca_settings):
         self.predictor = Predictor(
             data_dir=roca_settings["data_dir"],
             model_path=roca_settings["model_path"],
@@ -53,10 +45,6 @@ class SimCADDetector(object):
             wild=roca_settings["wild"])
 
         self.to_file = roca_settings["output_dir"] != "none"
-        return True
-
-    def loadSimSettings(self, sim_settings):
-        self.sim_manager.loadSettings(sim_settings)
         return True
 
     def updateSceneName(self, scene_name):
@@ -67,11 +55,11 @@ class SimCADDetector(object):
 
     def detect(self):
         if self.image is None:
-            print("[ERROR][SimCADDetector::detect]")
+            print("[ERROR][ROCADetector::detect]")
             print("\t image is None!")
             return False
         if self.scene_name is None:
-            print("[ERROR][SimCADDetector::detect]")
+            print("[ERROR][ROCADetector::detect]")
             print("\t scene_name is None!")
             return False
 
@@ -103,44 +91,24 @@ class SimCADDetector(object):
         self.updateSceneName(scene_name)
 
         if not self.detect():
-            print("[ERROR][SimCADDetector::detectImage]")
+            print("[ERROR][ROCADetector::detectImage]")
             print("\t detect failed!")
             return False
         return True
 
     def detectImageFromPath(self, image_file_path, scene_name=None):
         if not os.path.exists(image_file_path):
-            print("[ERROR][SimCADDetector::detectImageFromPath]")
+            print("[ERROR][ROCADetector::detectImageFromPath]")
             print("\t image file not exist!")
             return False
 
         image = Image.open(image_file_path)
         return self.detectImage(image, scene_name)
 
-    def detectObservations(self):
-        if self.scene_name is None:
-            print("[ERROR][SimCADDetector::detectObservations]")
-            print("\t scene_name is None!")
-            return False
-
-        observations = self.sim_manager.sim_loader.observations
-
-        if "color_sensor" not in observations.keys():
-            print("[ERROR][SimCADDetector::detectObservations]")
-            print("\t color_sensor observation not exist!")
-            return False
-
-        rgb_obs = observations["color_sensor"]
-        if not self.detectImage(rgb_obs):
-            print("[ERROR][SimCADDetector::detectObservations]")
-            print("\t detectImage failed!")
-            return False
-        return True
-
     def renderResult(self):
         if self.predictor.can_render:
             if self.masked_image is None:
-                print("[ERROR][SimCADDetector::renderResult]")
+                print("[ERROR][ROCADetector::renderResult]")
                 print("\t masked_image is None!")
                 return False
 
@@ -167,10 +135,6 @@ class SimCADDetector(object):
 
 def demo():
     scene_name = "scene0474_02"
-    glb_file_path = \
-        "/home/chli/habitat/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
-    control_mode = "pose"
-    pause_time = 0.001
 
     roca_settings = {
         "model_path": "../Models/model_best.pth",
@@ -179,25 +143,10 @@ def demo():
         "wild": False,
         "output_dir": "none",
     }
-    sim_settings = {
-        "width": 256,
-        "height": 256,
-        "scene": glb_file_path,
-        "default_agent": 0,
-        "move_dist": 0.25,
-        "rotate_angle": 10.0,
-        "sensor_height": 0,
-        "color_sensor": True,
-        "depth_sensor": True,
-        "semantic_sensor": True,
-        "seed": 1,
-        "enable_physics": False,
-    }
 
-    sim_cad_detector = SimCADDetector()
-    sim_cad_detector.updateSceneName(scene_name)
-    sim_cad_detector.loadROCASettings(roca_settings)
-    #  sim_cad_detector.loadSimSettings(sim_settings)
+    roca_detector = ROCADetector()
+    roca_detector.updateSceneName(scene_name)
+    roca_detector.loadSettings(roca_settings)
 
     scene_name_dict = {
         '3m': 'scene0474_02',
@@ -208,8 +157,8 @@ def demo():
 
     for name in scene_name_dict.keys():
         scene_name = scene_name_dict[name]
-        sim_cad_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
-        sim_cad_detector.renderResult()
+        roca_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
+        roca_detector.renderResult()
     return True
 
 if __name__ == '__main__':
