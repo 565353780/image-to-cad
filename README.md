@@ -45,7 +45,9 @@ cd ..
 git clone --recursive https://github.com/cangumeli/Scan2CADRasterizer.git
 cd Scan2CADRasterizer
 pip install .
-cd ../image-to-cad
+cd ../image-to-cad/network
+git clone https://github.com/565353780/habitat-sim-manage.git
+cd ..
 
 pip install dataclasses opencv-python numpy-quaternion \
   pandas scipy trimesh rtree numba open3d==0.13.0
