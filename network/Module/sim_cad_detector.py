@@ -1,0 +1,216 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+
+sys.path.append("./habitat_sim_manage/")
+
+import argparse
+import numpy as np
+import open3d as o3d
+from PIL import Image
+from trimesh.exchange.export import export_mesh
+from trimesh.util import concatenate as stack_meshes
+
+from roca.engine import Predictor
+
+from habitat_sim_manage.Module.sim_manager import SimManager
+
+class SimCADDetector(object):
+    def __init__(self):
+        self.predictor = None
+        self.to_file = None
+        self.sim_manager = SimManager()
+
+        self.image = None
+        self.scene_name = None
+        self.instances = None
+        self.cad_ids = None
+        self.meshes = None
+        self.masked_image = None
+        self.save_idx = 0
+        return
+
+    def reset(self):
+        self.predictor = None
+        self.to_file = None
+        self.sim_manager.reset()
+
+        self.image = None
+        self.scene_name = None
+        self.meshes = None
+        self.masked_image = None
+        self.save_idx = 0
+        return True
+
+    def loadROCASettings(self, roca_settings):
+        self.predictor = Predictor(
+            data_dir=roca_settings["data_dir"],
+            model_path=roca_settings["model_path"],
+            config_path=roca_settings["config_path"],
+            wild=roca_settings["wild"])
+
+        self.to_file = roca_settings["output_dir"] != "none"
+        return True
+
+    def loadSimSettings(self, sim_settings):
+        self.sim_manager.loadSettings(sim_settings)
+        return True
+
+    def updateSceneName(self, scene_name):
+        if scene_name is None:
+            return True
+        self.scene_name = scene_name
+        return True
+
+    def detect(self):
+        if self.image is None:
+            print("[ERROR][SimCADDetector::detect]")
+            print("\t image is None!")
+            return False
+        if self.scene_name is None:
+            print("[ERROR][SimCADDetector::detect]")
+            print("\t scene_name is None!")
+            return False
+
+        self.image = np.asarray(self.image)
+
+        self.instances, self.cad_ids = self.predictor(
+            self.image, scene=self.scene_name)
+
+        self.meshes = self.predictor.output_to_mesh(
+            self.instances, self.cad_ids,
+            excluded_classes={'table'} if self.predictor.wild else (),
+            as_open3d=not self.to_file)
+
+        self.masked_image = None
+
+        if self.predictor.can_render:
+            rendering, ids = self.predictor.render_meshes(self.meshes)
+            mask = ids > 0
+            self.masked_image = self.image.copy()
+            self.masked_image[mask] = np.clip(
+                0.8 * rendering[mask] * 255 + 0.2 * self.masked_image[mask],
+                0,
+                255
+            ).astype(np.uint8)
+        return True
+
+    def detectImage(self, image, scene_name=None):
+        self.image = image
+        self.updateSceneName(scene_name)
+
+        if not self.detect():
+            print("[ERROR][SimCADDetector::detectImage]")
+            print("\t detect failed!")
+            return False
+        return True
+
+    def detectImageFromPath(self, image_file_path, scene_name=None):
+        if not os.path.exists(image_file_path):
+            print("[ERROR][SimCADDetector::detectImageFromPath]")
+            print("\t image file not exist!")
+            return False
+
+        image = Image.open(image_file_path)
+        return self.detectImage(image, scene_name)
+
+    def detectObservations(self):
+        if self.scene_name is None:
+            print("[ERROR][SimCADDetector::detectObservations]")
+            print("\t scene_name is None!")
+            return False
+
+        observations = self.sim_manager.sim_loader.observations
+
+        if "color_sensor" not in observations.keys():
+            print("[ERROR][SimCADDetector::detectObservations]")
+            print("\t color_sensor observation not exist!")
+            return False
+
+        rgb_obs = observations["color_sensor"]
+        if not self.detectImage(rgb_obs):
+            print("[ERROR][SimCADDetector::detectObservations]")
+            print("\t detectImage failed!")
+            return False
+        return True
+
+    def renderResult(self):
+        if self.predictor.can_render:
+            if self.masked_image is None:
+                print("[ERROR][SimCADDetector::renderResult]")
+                print("\t masked_image is None!")
+                return False
+
+            img = o3d.geometry.Image(self.masked_image)
+            o3d.visualization.draw_geometries([img], height=480, width=640)
+
+        o3d.visualization.draw_geometries(self.meshes)
+        return True
+
+    def saveResult(self, output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+        if self.masked_image is not None:
+            Image.fromarray(self.masked_image).save(
+                output_dir + 'overlay_' + self.scene_name + \
+                '_' + str(self.save_idx) + '.jpg')
+
+        out_file = output_dir + 'mesh_' + self.scene_name + \
+            '_' + str(self.save_idx) + '.ply'
+        export_mesh(stack_meshes(self.meshes), out_file, file_type='ply')
+
+        self.save_idx += 1
+        return True
+
+def demo():
+    scene_name = "scene0474_02"
+    glb_file_path = \
+        "/home/chli/habitat/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
+    control_mode = "pose"
+    pause_time = 0.001
+
+    roca_settings = {
+        "model_path": "../Models/model_best.pth",
+        "data_dir": "../Data/Dataset/",
+        "config_path": "../Models/config.yaml",
+        "wild": False,
+        "output_dir": "none",
+    }
+    sim_settings = {
+        "width": 256,
+        "height": 256,
+        "scene": glb_file_path,
+        "default_agent": 0,
+        "move_dist": 0.25,
+        "rotate_angle": 10.0,
+        "sensor_height": 0,
+        "color_sensor": True,
+        "depth_sensor": True,
+        "semantic_sensor": True,
+        "seed": 1,
+        "enable_physics": False,
+    }
+
+    sim_cad_detector = SimCADDetector()
+    sim_cad_detector.updateSceneName(scene_name)
+    sim_cad_detector.loadROCASettings(roca_settings)
+    #  sim_cad_detector.loadSimSettings(sim_settings)
+
+    scene_name_dict = {
+        '3m': 'scene0474_02',
+        'sofa': 'scene0207_00',
+        'lab': 'scene0378_02',
+        'desk': 'scene0474_02',
+    }
+
+    for name in scene_name_dict.keys():
+        scene_name = scene_name_dict[name]
+        sim_cad_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
+        sim_cad_detector.renderResult()
+    return True
+
+if __name__ == '__main__':
+    demo()
+
