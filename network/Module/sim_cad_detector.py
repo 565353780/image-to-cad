@@ -38,6 +38,8 @@ class SimCADDetector(object):
 
         self.image = None
         self.scene_name = None
+        self.instances = None
+        self.cad_ids = None
         self.meshes = None
         self.masked_image = None
         self.save_idx = 0

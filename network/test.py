@@ -27,6 +27,7 @@ def demo():
         'lab': 'scene0378_02',
         'desk': 'scene0474_02',
     }
+
     scene_name_dict = {
         #  'desk': 'scene0378_02',
         'desk': 'scene0474_02',
