@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import sys
-from getch import getch
-
 sys.path.append("./habitat_sim_manage/")
+
+from getch import getch
 
 from habitat_sim_manage.Data.point import Point
 from habitat_sim_manage.Data.rad import Rad
