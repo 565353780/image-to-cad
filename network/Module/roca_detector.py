@@ -177,6 +177,7 @@ def demo():
     for name in scene_name_dict.keys():
         scene_name = scene_name_dict[name]
         roca_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
+        result = roca_detector.getResult()
         roca_detector.renderResult()
     return True
 
