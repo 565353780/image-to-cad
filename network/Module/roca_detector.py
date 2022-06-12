@@ -106,6 +106,17 @@ class ROCADetector(object):
         image = Image.open(image_file_path)
         return self.detectImage(image, scene_name)
 
+    def getResult(self):
+        result_dict = {
+            "image": self.image,
+            "scene_name": self.scene_name,
+            "instances": self.instances,
+            "cad_ids": self.cad_ids,
+            "meshes": self.meshes,
+            "masked_image": self.masked_image,
+        }
+        return result_dict
+
     def renderResult(self):
         if self.predictor.can_render:
             if self.masked_image is None:
