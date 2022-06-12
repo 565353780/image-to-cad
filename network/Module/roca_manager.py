@@ -13,6 +13,9 @@ from habitat_sim_manage.Data.pose import Pose
 from Module.roca_sim_detector import ROCASimDetector
 from Module.roca_merger import ROCAMerger
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 class ROCAManager(object):
     def __init__(self):
         self.roca_sim_detector = ROCASimDetector()
@@ -22,6 +25,20 @@ class ROCAManager(object):
     def reset(self):
         self.roca_sim_detector.reset()
         self.roca_merger.reset()
+        return True
+
+    def showPoints(self, point_list):
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+
+        for i in range(int(len(point_list) / 2)):
+            start = point_list[2 * i]
+            end = point_list[2 * i + 1]
+            ax.quiver(start[0], start[1], start[2],
+                  end[0]-start[0], end[1]-start[1], end[2]-start[2],
+                  arrow_length_ratio=0.1)
+
+        plt.show()
         return True
 
     def loadSettings(self, roca_settings, sim_settings=None):
@@ -39,7 +56,8 @@ class ROCAManager(object):
     def addResult(self):
         result = self.roca_sim_detector.getResult()
         self.roca_merger.addResult(result)
-        self.roca_merger.getPoseListInWorld()
+        pose_list = self.roca_merger.getPoseListInWorld()
+        self.showPoints(pose_list)
         return True
 
     def startKeyBoardControlRender(self, wait_val):
