@@ -33,6 +33,9 @@ class ROCASimDetector(ROCADetector):
     def setControlMode(self, control_mode):
         return self.sim_manager.setControlMode(control_mode)
 
+    def setRenderMode(self, render_mode):
+        return self.sim_manager.setRenderMode(render_mode)
+
     def detectObservations(self):
         if self.scene_name is None:
             print("[ERROR][ROCASimDetector::detectObservations]")
@@ -54,15 +57,15 @@ class ROCASimDetector(ROCADetector):
             return False
         return True
 
-    def startKeyBoardControlRender(self, pause_time):
+    def startKeyBoardControlRender(self, wait_val):
         #  self.sim_manager.resetAgentPose()
-        self.sim_manager.sim_renderer.initPlt()
+        self.sim_manager.sim_renderer.init()
 
         while True:
             if not self.sim_manager.sim_renderer.renderFrame(
                     self.sim_manager.sim_loader.observations):
                 break
-            self.sim_manager.sim_renderer.pausePlt(pause_time)
+            self.sim_manager.sim_renderer.wait(wait_val)
 
             agent_state = self.sim_manager.sim_loader.getAgentState()
             print("agent_state: position", agent_state.position,
@@ -71,11 +74,11 @@ class ROCASimDetector(ROCADetector):
             input_key = getch()
             if input_key == "a":
                 self.detectObservations()
-                #  self.renderResult()
+                self.renderResultWithProcess()
                 continue
             if not self.sim_manager.keyBoardControl(input_key):
                 break
-        self.sim_manager.sim_renderer.closePlt()
+        self.sim_manager.sim_renderer.close()
         return True
 
 def demo_roca():
@@ -111,7 +114,8 @@ def demo_roca_sim():
     glb_file_path = \
         "/home/chli/habitat/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
     control_mode = "pose"
-    pause_time = 0.001
+    render_mode = "cv"
+    wait_val = 1
 
     roca_settings = {
         "model_path": "../Models/model_best.pth",
@@ -139,13 +143,14 @@ def demo_roca_sim():
     roca_sim_detector.loadSettings(roca_settings, sim_settings)
     roca_sim_detector.updateSceneName(scene_name)
     roca_sim_detector.setControlMode(control_mode)
+    roca_sim_detector.setRenderMode(render_mode)
 
     roca_sim_detector.sim_manager.pose_controller.pose = Pose(
         Point(1.7, 1.5, -2.5), Rad(0.2, 0.0))
     roca_sim_detector.sim_manager.sim_loader.setAgentState(
         roca_sim_detector.sim_manager.pose_controller.getAgentState())
 
-    roca_sim_detector.startKeyBoardControlRender(pause_time)
+    roca_sim_detector.startKeyBoardControlRender(wait_val)
     return True
 
 def demo():

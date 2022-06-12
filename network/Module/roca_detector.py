@@ -7,6 +7,7 @@ import open3d as o3d
 from PIL import Image
 from trimesh.exchange.export import export_mesh
 from trimesh.util import concatenate as stack_meshes
+from multiprocessing import Process
 
 from roca.engine import Predictor
 
@@ -116,6 +117,13 @@ class ROCADetector(object):
             o3d.visualization.draw_geometries([img], height=480, width=640)
 
         o3d.visualization.draw_geometries(self.meshes)
+        return True
+
+    def renderResultWithProcess(self):
+        process = Process(target=self.renderResult)
+        process.start()
+        process.join()
+        process.close()
         return True
 
     def saveResult(self, output_dir):
