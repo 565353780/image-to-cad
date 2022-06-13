@@ -8,6 +8,10 @@ from Data.trans import Trans
 from Data.instance import Instance
 
 from Method.nms import getKeepList
+from Method.directions import \
+    getMatrixFromPose, getPoseFromMatrix, \
+    getTransFromMatrix, getMatrixFromTrans, \
+    getRadFromRotation, getRotationFromRad
 
 class ROCAMerger(object):
     def __init__(self):
@@ -76,7 +80,7 @@ class ROCAMerger(object):
             [0, sin(pi), cos(pi), 0],
             [0, 0, 0, 1]
         ])
-        #  scene_rot = np.linalg.inv(scene_rot)
+        inverse_rot = np.linalg.inv(scene_rot)
 
         init_point_list = [
             [-0.25, -0.25, -0.25, 1.0],
@@ -96,6 +100,16 @@ class ROCAMerger(object):
         for instance_list in self.instance_list_list:
             for instance in instance_list:
                 trans_matrix = scene_rot @ instance.getTransMatrix()
+                print("========")
+                print("trans_matrix")
+                print(trans_matrix)
+                pose = getPoseFromMatrix(trans_matrix)
+                pose.outputInfo()
+                m = getMatrixFromPose(pose)
+                print(m)
+                print("====")
+
+                #  trans_matrix = trans_matrix @ inverse_rot
                 for pair in init_line_pair:
                     start = init_point_list[pair[0]]
                     end = init_point_list[pair[1]]
