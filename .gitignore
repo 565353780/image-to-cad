@@ -140,10 +140,6 @@ cython_debug/
 # Output logs
 network/output*
 
-# ln folders
-Models
-Data
-
 # git
 habitat_sim_manage
 
