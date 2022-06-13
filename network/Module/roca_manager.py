@@ -53,14 +53,11 @@ class ROCAManager(object):
     def setRenderMode(self, render_mode):
         return self.roca_sim_detector.setRenderMode(render_mode)
 
-    def addResult(self):
+    def convertResult(self):
         result_dict = self.roca_sim_detector.getResultDict()
         self.roca_merger.addResult(
             result_dict, self.roca_sim_detector.sim_manager.pose_controller.pose)
         return True
-
-    def render3D(self):
-        return self.roca_merger.render3DWithProcess()
 
     def startKeyBoardControlRender(self, wait_val):
         #  self.roca_sim_detector.sim_manager.resetAgentPose()
@@ -79,9 +76,9 @@ class ROCAManager(object):
             input_key = getch()
             if input_key == "a":
                 self.roca_sim_detector.detectObservations()
-                self.addResult()
+                self.convertResult()
                 #  self.roca_sim_detector.renderResultWithProcess()
-                self.render3D()
+                self.roca_merger.render3DWithProcess()
                 continue
             if not self.roca_sim_detector.sim_manager.keyBoardControl(input_key):
                 break

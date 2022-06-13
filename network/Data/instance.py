@@ -52,12 +52,6 @@ class Instance(object):
             camera_pose.rad
         )
 
-        print("====")
-        instance_pose = getPoseFromMatrix(instance_matrix)
-        instance_pose.outputInfo()
-        real_camera_pose.outputInfo()
-        print("====")
-
         camera_matrix = getMatrixFromPose(real_camera_pose)
         trans_matrix = camera_matrix @ instance_matrix
 
