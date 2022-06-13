@@ -34,11 +34,11 @@ class Result(object):
             meshes[instance_idx])
         return instance
 
-    def updateInstanceWorldTrans(self, camera_pose):
+    def updateInstanceWorldPose(self, camera_pose):
         for instance in self.instance_list:
-            if not instance.updateWorldTrans(camera_pose):
-                print("[ERROR][Result::updateInstanceWorldTrans]")
-                print("\t updateWorldTrans failed!")
+            if not instance.updateWorldPose(camera_pose):
+                print("[ERROR][Result::updateInstanceWorldPose]")
+                print("\t updateWorldPose failed!")
                 return False
         return True
 
@@ -49,9 +49,9 @@ class Result(object):
         self.instance_list = [
             self.getInstance(result_dict, i) for i in range(len(instances))]
 
-        if not self.updateInstanceWorldTrans(camera_pose):
-            print("[ERROR][Result::updateInstanceWorldTrans]")
-            print("\t updateWorldTrans failed!")
+        if not self.updateInstanceWorldPose(camera_pose):
+            print("[ERROR][Result::loadResultDict]")
+            print("\t updateInstanceWorldPose failed!")
             return False
 
         self.keep_list = getKeepList(self.instance_list, min_dist_3d)

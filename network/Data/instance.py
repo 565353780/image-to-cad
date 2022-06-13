@@ -9,7 +9,7 @@ from Config.matrix import SCENE_ROT, SCENE_ROT_INV
 from Data.trans import Trans
 
 from Method.directions import \
-    getPoseFromTrans, getPoseMul, getMatrixFromPose
+    getPoseFromTrans, getPoseMul, getMatrixFromPose, getPoseFromMatrix
 
 class Instance(object):
     def __init__(self,
@@ -29,29 +29,37 @@ class Instance(object):
         if self.mesh is None:
             return True
 
-        self.world_mesh = o3d.geometry.TriangleMesh(self.mesh)
+        #  self.world_mesh = o3d.geometry.TriangleMesh(self.mesh)
+        self.world_mesh = self.mesh
 
-        trans_matrix = self.trans.getTransMatrix()
-        self.world_mesh.transform(np.linalg.inv(trans_matrix))
+        trans_matrix = self.getInverseTransMatrix()
+        self.world_mesh.transform(trans_matrix)
 
         trans_matrix = getMatrixFromPose(self.world_pose)
         self.world_mesh.transform(trans_matrix)
         return True
 
-    def updateWorldTrans(self, camera_pose):
-        instance_pose = getPoseFromTrans(self.trans)
-        self.world_pose = getPoseMul(camera_pose, instance_pose)
+    def updateWorldPose(self, camera_pose):
+        instance_matrix = self.getTransMatrix()
+        camera_matrix = getMatrixFromPose(camera_pose)
+        #  self.world_pose = getPoseMul(camera_pose, instance_pose)
+        self.world_pose = getPoseFromMatrix(instance_matrix)
 
         if not self.updateWorldMesh():
-            print("[ERROR][Instance::updateWorldTrans]")
+            print("[ERROR][Instance::updateWorldPose]")
             print("\t updateWorldMesh failed!")
             return False
         return True
 
     def getTransMatrix(self):
         trans_matrix = self.trans.getTransMatrix()
-        matrix = SCENE_ROT_INV @ trans_matrix @ SCENE_ROT
+        matrix = SCENE_ROT @ trans_matrix
         return matrix
+
+    def getInverseTransMatrix(self):
+        trans_matrix = self.getTransMatrix()
+        inverse_trans_matrix = np.linalg.inv(trans_matrix)
+        return inverse_trans_matrix
 
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level
