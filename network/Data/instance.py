@@ -6,10 +6,12 @@ import open3d as o3d
 
 from Config.matrix import SCENE_ROT, SCENE_ROT_INV
 
+from habitat_sim_manage.Data.point import Point
+from habitat_sim_manage.Data.pose import Pose
 from Data.trans import Trans
 
 from Method.directions import \
-    getPoseFromTrans, getPoseMul, getMatrixFromPose, getPoseFromMatrix
+    getMatrixFromPose, getPoseFromMatrix
 
 class Instance(object):
     def __init__(self,
@@ -41,9 +43,25 @@ class Instance(object):
 
     def updateWorldPose(self, camera_pose):
         instance_matrix = self.getTransMatrix()
-        camera_matrix = getMatrixFromPose(camera_pose)
-        #  self.world_pose = getPoseMul(camera_pose, instance_pose)
-        self.world_pose = getPoseFromMatrix(instance_matrix)
+
+        real_camera_pose = Pose(
+            Point(
+                camera_pose.position.z,
+                camera_pose.position.x,
+                camera_pose.position.y),
+            camera_pose.rad
+        )
+
+        print("====")
+        instance_pose = getPoseFromMatrix(instance_matrix)
+        instance_pose.outputInfo()
+        real_camera_pose.outputInfo()
+        print("====")
+
+        camera_matrix = getMatrixFromPose(real_camera_pose)
+        trans_matrix = camera_matrix @ instance_matrix
+
+        self.world_pose = getPoseFromMatrix(trans_matrix)
 
         if not self.updateWorldMesh():
             print("[ERROR][Instance::updateWorldPose]")

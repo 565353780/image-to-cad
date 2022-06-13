@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import open3d as o3d
+from multiprocessing import Process
+
 from Data.result import Result
 
 class ROCAMerger(object):
@@ -55,6 +58,26 @@ class ROCAMerger(object):
                 pose_list.append(instance.mesh.get_center())
                 pose_list.append(new_point)
         return pose_list
+
+    def render3D(self):
+        if len(self.result_list) == 0:
+            return True
+
+        mesh_list = []
+        for result in self.result_list:
+            for instance, keep in zip(result.instance_list, result.keep_list):
+                if not keep:
+                    continue
+                mesh_list.append(instance.world_mesh)
+        o3d.visualization.draw_geometries(mesh_list)
+        return True
+
+    def render3DWithProcess(self):
+        process = Process(target=self.render3D)
+        process.start()
+        process.join()
+        process.close()
+        return True
 
 def demo():
     roca_merger = ROCAMerger()
