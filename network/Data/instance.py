@@ -11,7 +11,8 @@ from habitat_sim_manage.Data.pose import Pose
 from Data.trans import Trans
 
 from Method.directions import \
-    getMatrixFromPose, getPoseFromMatrix
+    getMatrixFromPose, getPoseFromMatrix, \
+    getPoseFromTrans, getPoseMul
 
 class Instance(object):
     def __init__(self,
@@ -34,28 +35,30 @@ class Instance(object):
         #  self.world_mesh = o3d.geometry.TriangleMesh(self.mesh)
         self.world_mesh = self.mesh
 
-        trans_matrix = self.getInverseTransMatrix()
-        self.world_mesh.transform(trans_matrix)
+        inverse_trans_matrix = self.getInverseTransMatrix()
+        self.world_mesh.transform(inverse_trans_matrix)
 
         trans_matrix = getMatrixFromPose(self.world_pose)
         self.world_mesh.transform(trans_matrix)
         return True
 
     def updateWorldPose(self, camera_pose):
-        instance_matrix = self.getTransMatrix()
-
         real_camera_pose = Pose(
             Point(
                 camera_pose.position.z,
                 camera_pose.position.x,
                 camera_pose.position.y),
-            camera_pose.rad
-        )
+            camera_pose.rad,
+            camera_pose.scale)
 
-        camera_matrix = getMatrixFromPose(real_camera_pose)
-        trans_matrix = camera_matrix @ instance_matrix
+        instance_matrix = self.getTransMatrix()
 
-        self.world_pose = getPoseFromMatrix(trans_matrix)
+        #  camera_matrix = getMatrixFromPose(real_camera_pose)
+        #  trans_matrix = camera_matrix @ instance_matrix
+        #  self.world_pose = getPoseFromMatrix(trans_matrix)
+
+        instance_pose = getPoseFromMatrix(instance_matrix)
+        self.world_pose = getPoseMul(instance_pose, real_camera_pose)
 
         if not self.updateWorldMesh():
             print("[ERROR][Instance::updateWorldPose]")

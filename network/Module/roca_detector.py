@@ -72,7 +72,10 @@ class ROCADetector(object):
         self.meshes = self.predictor.output_to_mesh(
             self.instances, self.cad_ids,
             excluded_classes={'table'} if self.predictor.wild else (),
-            as_open3d=not self.to_file)
+            as_open3d=not self.to_file,
+            nms_3d=False)
+        if not self.to_file:
+            self.meshes.pop()
 
         self.masked_image = None
 

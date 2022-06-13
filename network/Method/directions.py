@@ -10,11 +10,11 @@ from math import sqrt, atan2, asin
 from roca.utils.linalg import make_M_from_tqs, decompose_mat4
 
 from habitat_sim.utils.common import \
-    quat_from_angle_axis, quat_rotate_vector
+    quat_from_angle_axis
 
-from Data.point import Point
-from Data.rad import Rad
-from Data.pose import Pose
+from habitat_sim_manage.Data.point import Point
+from habitat_sim_manage.Data.rad import Rad
+from habitat_sim_manage.Data.pose import Pose
 
 from Data.trans import Trans
 
@@ -73,8 +73,7 @@ def getPoseFromMatrix(matrix):
     t, q, s = decompose_mat4(matrix)
     position = Point(t[0], t[1], t[2])
     rad = getRadFromRotation(q)
-    pose = Pose(position, rad)
-    pose.setScale(s)
+    pose = Pose(position, rad, s)
     return pose
 
 def getMatrixFromPose(pose):
@@ -94,8 +93,7 @@ def getTransFromPose(pose):
 def getPoseFromTrans(trans):
     position = Point(trans.translation[0], trans.translation[1], trans.translation[2])
     rad = getRadFromRotation(trans.rotation)
-    pose = Pose(position, rad)
-    pose.setScale(trans.scale)
+    pose = Pose(position, rad, trans.scale)
     return pose
 
 def getPoseMul(pose_1, pose_2):
