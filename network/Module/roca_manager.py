@@ -54,8 +54,9 @@ class ROCAManager(object):
         return self.roca_sim_detector.setRenderMode(render_mode)
 
     def addResult(self):
-        result = self.roca_sim_detector.getResult()
-        self.roca_merger.addResult(result)
+        result_dict = self.roca_sim_detector.getResultDict()
+        self.roca_merger.addResult(
+            result_dict, self.roca_sim_detector.sim_manager.pose_controller.pose)
         pose_list = self.roca_merger.getPoseListInWorld()
         self.showPoints(pose_list)
         return True

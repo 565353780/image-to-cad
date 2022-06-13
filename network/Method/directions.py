@@ -5,16 +5,17 @@ import sys
 sys.path.append("./habitat_sim_manage/")
 
 import numpy as np
-from math import sqrt, atan2, cos, sin, asin
-
-from habitat_sim.utils.common import \
-    quat_from_angle_axis
+from math import sqrt, atan2, asin
 
 from roca.utils.linalg import make_M_from_tqs, decompose_mat4
+
+from habitat_sim.utils.common import \
+    quat_from_angle_axis, quat_rotate_vector
 
 from Data.point import Point
 from Data.rad import Rad
 from Data.pose import Pose
+
 from Data.trans import Trans
 
 def getTransFromMatrix(matrix):
@@ -73,7 +74,7 @@ def getPoseFromMatrix(matrix):
     position = Point(t[0], t[1], t[2])
     rad = getRadFromRotation(q)
     pose = Pose(position, rad)
-    pose.scale = s
+    pose.setScale(s)
     return pose
 
 def getMatrixFromPose(pose):
@@ -82,4 +83,25 @@ def getMatrixFromPose(pose):
     s = pose.scale
     matrix = make_M_from_tqs(t, q, s)
     return matrix
+
+def getTransFromPose(pose):
+    t = [pose.position.x, pose.position.y, pose.position.z]
+    q = getRotationFromRad(pose.rad)
+    s = pose.scale
+    trans = Trans(t, q, s)
+    return trans
+
+def getPoseFromTrans(trans):
+    position = Point(trans.translation[0], trans.translation[1], trans.translation[2])
+    rad = getRadFromRotation(trans.rotation)
+    pose = Pose(position, rad)
+    pose.setScale(trans.scale)
+    return pose
+
+def getPoseMul(pose_1, pose_2):
+    matrix_1 = getMatrixFromPose(pose_1)
+    matrix_2 = getMatrixFromPose(pose_2)
+    matrix_mul = matrix_2 @ matrix_1
+    pose_mul = getPoseFromMatrix(matrix_mul)
+    return pose_mul
 

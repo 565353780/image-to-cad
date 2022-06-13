@@ -106,7 +106,7 @@ class ROCADetector(object):
         image = Image.open(image_file_path)
         return self.detectImage(image, scene_name)
 
-    def getResult(self):
+    def getResultDict(self):
         result_dict = {
             "image": self.image,
             "scene_name": self.scene_name,
@@ -177,7 +177,7 @@ def demo():
     for name in scene_name_dict.keys():
         scene_name = scene_name_dict[name]
         roca_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
-        result = roca_detector.getResult()
+        result = roca_detector.getResultDict()
         roca_detector.renderResult()
     return True
 
