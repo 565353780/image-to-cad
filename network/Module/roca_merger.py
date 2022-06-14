@@ -24,22 +24,26 @@ class ROCAMerger(object):
         self.result_list.append(result)
         return True
 
-    def render3D(self):
-        if len(self.result_list) == 0:
-            return True
-
-        mesh_list = []
+    def getResultMeshList(self):
+        result_mesh_list = []
         for result in self.result_list:
             for instance, keep in zip(result.instance_list, result.keep_list):
                 if not keep:
                     continue
-                mesh_list.append(instance.world_mesh)
-                mesh_list.append(instance.getXYZBBox([0, 255, 0]))
-                mesh_list.append(instance.getOrientedBBox([0, 0, 255]))
+                result_mesh_list.append(instance.world_mesh)
+                result_mesh_list.append(instance.getXYZBBox([0, 255, 0]))
+                result_mesh_list.append(instance.getOrientedBBox([0, 0, 255]))
             if result.camera_instance is None:
                 continue
-            mesh_list.append(result.camera_instance.world_mesh)
-        o3d.visualization.draw_geometries(mesh_list)
+            result_mesh_list.append(result.camera_instance.world_mesh)
+        return result_mesh_list
+
+    def render3D(self):
+        if len(self.result_list) == 0:
+            return True
+
+        result_mesh_list = self.getResultMeshList()
+        o3d.visualization.draw_geometries(result_mesh_list)
         return True
 
     def render3DWithProcess(self):
