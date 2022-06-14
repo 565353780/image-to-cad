@@ -34,6 +34,8 @@ class ROCAMerger(object):
                 if not keep:
                     continue
                 mesh_list.append(instance.world_mesh)
+                mesh_list.append(instance.getXYZBBox([0, 255, 0]))
+                mesh_list.append(instance.getOrientedBBox([0, 0, 255]))
             if result.camera_instance is None:
                 continue
             mesh_list.append(result.camera_instance.world_mesh)

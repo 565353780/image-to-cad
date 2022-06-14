@@ -81,6 +81,16 @@ class Instance(object):
         bbox.transform(self.getWorldTransMatrix())
         return bbox
 
+    def getXYZBBox(self, color):
+        xyz_bbox = self.world_mesh.get_axis_aligned_bounding_box()
+        xyz_bbox.color = np.array(color, dtype=np.float32) / 255.0
+        return xyz_bbox
+
+    def getOrientedBBox(self, color):
+        oriented_bbox = self.world_mesh.get_oriented_bounding_box()
+        oriented_bbox.color = np.array(color, dtype=np.float32) / 255.0
+        return oriented_bbox
+
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level
 
