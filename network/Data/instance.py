@@ -4,7 +4,7 @@
 import numpy as np
 import open3d as o3d
 
-from Config.matrix import SCENE_ROT
+from Config.matrix import INIT_MATRIX, SCENE_ROT
 
 from Data.trans import Trans
 
@@ -61,6 +61,19 @@ class Instance(object):
         trans_matrix = self.getTransMatrix()
         inverse_trans_matrix = np.linalg.inv(trans_matrix)
         return inverse_trans_matrix
+
+    def getWorldTransMatrix(self):
+        if self.world_trans is None:
+            print("[WARN][Instance::getWorldTransMatrix]")
+            print("\t world_trans is None!")
+            return INIT_MATRIX
+        world_trans_matrix = getMatrixFromTrans(self.world_trans)
+        return world_trans_matrix
+
+    def getInverseWorldTransMatrix(self):
+        world_trans_matrix = self.getWorldTransMatrix()
+        inverse_world_trans_matrix = np.linalg.inv(world_trans_matrix)
+        return inverse_world_trans_matrix
 
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level
