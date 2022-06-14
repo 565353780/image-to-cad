@@ -118,7 +118,7 @@ class ROCADetector(object):
         }
         return result_dict
 
-    def renderResult(self):
+    def renderResultImage(self):
         if self.predictor.can_render:
             if self.masked_image is None:
                 print("[ERROR][ROCADetector::renderResult]")
@@ -127,15 +127,31 @@ class ROCADetector(object):
 
             img = o3d.geometry.Image(self.masked_image)
             o3d.visualization.draw_geometries([img], height=480, width=640)
+        return True
 
+    def renderResult3D(self):
         o3d.visualization.draw_geometries(self.meshes)
         return True
 
-    def renderResultWithProcess(self):
-        process = Process(target=self.renderResult)
+    def renderResultImageWithProcess(self):
+        process = Process(target=self.renderResultImage)
         process.start()
-        process.join()
-        process.close()
+        #  process.join()
+        #  process.close()
+        return True
+
+    def renderResult3DWithProcess(self):
+        process = Process(target=self.renderResult3D)
+        process.start()
+        #  process.join()
+        #  process.close()
+        return True
+
+    def renderResultWithProcess(self, render_image=True, render_3d=True):
+        if render_image:
+            self.renderResultImageWithProcess()
+        if render_3d:
+            self.renderResult3DWithProcess()
         return True
 
     def saveResult(self, output_dir):

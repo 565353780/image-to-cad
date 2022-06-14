@@ -43,8 +43,8 @@ class ROCAMerger(object):
     def render3DWithProcess(self):
         process = Process(target=self.render3D)
         process.start()
-        process.join()
-        process.close()
+        #  process.join()
+        #  process.close()
         return True
 
 def demo():
