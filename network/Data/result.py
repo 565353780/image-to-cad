@@ -36,9 +36,9 @@ class Result(object):
 
     def updateInstanceWorldPose(self, camera_pose):
         for instance in self.instance_list:
-            if not instance.updateWorldPose(camera_pose):
+            if not instance.updateWorldTrans(camera_pose):
                 print("[ERROR][Result::updateInstanceWorldPose]")
-                print("\t updateWorldPose failed!")
+                print("\t updateWorldTrans failed!")
                 return False
         return True
 

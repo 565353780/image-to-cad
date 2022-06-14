@@ -74,8 +74,6 @@ class ROCADetector(object):
             excluded_classes={'table'} if self.predictor.wild else (),
             as_open3d=not self.to_file,
             nms_3d=False)
-        #  if not self.to_file:
-            #  self.meshes.pop()
 
         self.masked_image = None
 

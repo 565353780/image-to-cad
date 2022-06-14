@@ -4,15 +4,13 @@
 import numpy as np
 import open3d as o3d
 
-from Config.matrix import SCENE_ROT, SCENE_ROT_INV
+from Config.matrix import SCENE_ROT
 
-from habitat_sim_manage.Data.point import Point
-from habitat_sim_manage.Data.pose import Pose
 from Data.trans import Trans
 
 from Method.directions import \
-    getMatrixFromPose, getPoseFromMatrix, \
-    getPoseFromTrans, getPoseMul
+    getTransFromMatrix, getMatrixFromTrans, \
+    getMatrixFromPose
 
 class Instance(object):
     def __init__(self,
@@ -24,7 +22,7 @@ class Instance(object):
         self.cad_id = cad_id
         self.mesh = mesh
 
-        self.world_pose = None
+        self.world_trans = None
         self.world_mesh = None
         return
 
@@ -32,38 +30,24 @@ class Instance(object):
         if self.mesh is None:
             return True
 
-        #  self.world_mesh = o3d.geometry.TriangleMesh(self.mesh)
-        self.world_mesh = self.mesh
+        self.world_mesh = o3d.geometry.TriangleMesh(self.mesh)
 
         inverse_trans_matrix = self.getInverseTransMatrix()
         self.world_mesh.transform(inverse_trans_matrix)
 
-        trans_matrix = getMatrixFromPose(self.world_pose)
+        trans_matrix = getMatrixFromTrans(self.world_trans)
         self.world_mesh.transform(trans_matrix)
         return True
 
-    def updateWorldPose(self, camera_pose):
-        real_camera_pose = Pose(
-            Point(
-                camera_pose.position.z,
-                camera_pose.position.x,
-                camera_pose.position.y),
-            camera_pose.rad,
-            camera_pose.scale)
-
+    def updateWorldTrans(self, camera_pose):
         instance_matrix = self.getTransMatrix()
 
-        #  camera_matrix = getMatrixFromPose(real_camera_pose)
-        #  trans_matrix = camera_matrix @ instance_matrix
-        #  self.world_pose = getPoseFromMatrix(trans_matrix)
-
-        instance_pose = getPoseFromMatrix(instance_matrix)
-        self.world_pose = getPoseMul(instance_pose, real_camera_pose)
-
-        self.world_pose.outputInfo()
+        camera_matrix = getMatrixFromPose(camera_pose)
+        trans_matrix = camera_matrix @ instance_matrix
+        self.world_trans = getTransFromMatrix(trans_matrix)
 
         if not self.updateWorldMesh():
-            print("[ERROR][Instance::updateWorldPose]")
+            print("[ERROR][Instance::updateWorldTrans]")
             print("\t updateWorldMesh failed!")
             return False
         return True
