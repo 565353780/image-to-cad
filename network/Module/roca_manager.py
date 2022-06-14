@@ -60,7 +60,7 @@ class ROCAManager(object):
             if input_key == "a":
                 self.roca_sim_detector.detectObservations()
                 self.convertResult()
-                #  self.roca_sim_detector.renderResultWithProcess()
+                self.roca_sim_detector.renderResultWithProcess()
                 self.roca_merger.render3DWithProcess()
                 continue
             if not self.roca_sim_detector.sim_manager.keyBoardControl(input_key):

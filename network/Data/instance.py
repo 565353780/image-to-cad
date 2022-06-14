@@ -60,6 +60,8 @@ class Instance(object):
         instance_pose = getPoseFromMatrix(instance_matrix)
         self.world_pose = getPoseMul(instance_pose, real_camera_pose)
 
+        self.world_pose.outputInfo()
+
         if not self.updateWorldMesh():
             print("[ERROR][Instance::updateWorldPose]")
             print("\t updateWorldMesh failed!")
