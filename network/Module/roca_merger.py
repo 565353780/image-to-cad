@@ -34,6 +34,9 @@ class ROCAMerger(object):
                 if not keep:
                     continue
                 mesh_list.append(instance.world_mesh)
+            if result.camera_instance is None:
+                continue
+            mesh_list.append(result.camera_instance.world_mesh)
         o3d.visualization.draw_geometries(mesh_list)
         return True
 

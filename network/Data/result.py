@@ -12,6 +12,7 @@ class Result(object):
         self.camera_pose = camera_pose
 
         self.keep_list = []
+        self.camera_instance = None
         return
 
     def getInstance(self, result_dict, instance_idx):
@@ -34,9 +35,23 @@ class Result(object):
             meshes[instance_idx])
         return instance
 
-    def updateInstanceWorldPose(self, camera_pose):
+    def updateCameraInstance(self, result_dict):
+        instances = result_dict["instances"]
+        meshes = result_dict["meshes"]
+        if len(instances) == len(meshes):
+            return True
+
+        self.camera_instance = Instance(mesh=meshes[-1])
+
+        if not self.camera_instance.updateWorldTrans(self.camera_pose):
+            print("[ERROR][Result::updateCameraInstance]")
+            print("\t updateWorldTrans failed!")
+            return False
+        return True
+
+    def updateInstanceWorldPose(self):
         for instance in self.instance_list:
-            if not instance.updateWorldTrans(camera_pose):
+            if not instance.updateWorldTrans(self.camera_pose):
                 print("[ERROR][Result::updateInstanceWorldPose]")
                 print("\t updateWorldTrans failed!")
                 return False
@@ -49,7 +64,12 @@ class Result(object):
         self.instance_list = [
             self.getInstance(result_dict, i) for i in range(len(instances))]
 
-        if not self.updateInstanceWorldPose(camera_pose):
+        if not self.updateCameraInstance(result_dict):
+            print("[ERROR][Result::loadResultDict]")
+            print("\t updateCameraInstance failed!")
+            return False
+
+        if not self.updateInstanceWorldPose():
             print("[ERROR][Result::loadResultDict]")
             print("\t updateInstanceWorldPose failed!")
             return False
