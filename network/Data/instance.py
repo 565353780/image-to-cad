@@ -5,6 +5,7 @@ import numpy as np
 import open3d as o3d
 
 from Config.matrix import INIT_MATRIX, SCENE_ROT
+from Config.bbox import getBBox
 
 from Data.trans import Trans
 
@@ -74,6 +75,11 @@ class Instance(object):
         world_trans_matrix = self.getWorldTransMatrix()
         inverse_world_trans_matrix = np.linalg.inv(world_trans_matrix)
         return inverse_world_trans_matrix
+
+    def getBBox(self):
+        bbox = getBBox()
+        bbox.transform(self.getWorldTransMatrix())
+        return bbox
 
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level
