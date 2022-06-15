@@ -20,7 +20,7 @@ class BBox(object):
         return
 
     def isValid(self):
-        if self.min_point == inf:
+        if self.min_point.x == inf:
             return False
         return True
 
@@ -39,6 +39,7 @@ class BBox(object):
             self.min_point = deepcopy(point)
             self.max_point = deepcopy(point)
             self.updateDiffPoint()
+            self.outputInfo()
             return True
 
         self.min_point.x = min(self.min_point.x, point.x)
@@ -48,6 +49,7 @@ class BBox(object):
         self.max_point.y = max(self.max_point.y, point.y)
         self.max_point.z = max(self.max_point.z, point.z)
         self.updateDiffPoint()
+        self.outputInfo()
         return True
 
     def addBBox(self, bbox):

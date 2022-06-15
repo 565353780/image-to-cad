@@ -12,7 +12,8 @@ from Data.bbox import BBox
 from Method.directions import \
     getTransFromMatrix, getMatrixFromTrans, \
     getMatrixFromPose
-from Method.bboxes import getOpen3DBBox
+from Method.bboxes import getOpen3DBBox, \
+    getBBoxFromOpen3DBBox, getOpen3DBBoxFromBBox
 
 class Instance(object):
     def __init__(self,
@@ -77,7 +78,7 @@ class Instance(object):
         inverse_world_trans_matrix = np.linalg.inv(world_trans_matrix)
         return inverse_world_trans_matrix
 
-    def getOpen3DBBox(self):
+    def getOpen3DTransBBox(self):
         bbox = getOpen3DBBox()
         bbox.transform(self.getWorldTransMatrix())
         return bbox
@@ -93,11 +94,14 @@ class Instance(object):
         return oriented_bbox
 
     def getBBox(self):
-        bbox = BBox()
         xyz_bbox = self.getOpen3DXYZBBox()
-        center = xyz_bbox.get_center()
-        half_extent = xyz_bbox.get_half_extent()
+        bbox = getBBoxFromOpen3DBBox(xyz_bbox)
         return bbox
+
+    def getOpen3DBBox(self, color=[255, 0, 0]):
+        bbox = self.getBBox()
+        open3d_bbox = getOpen3DBBoxFromBBox(bbox, color)
+        return open3d_bbox
 
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level
