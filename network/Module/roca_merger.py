@@ -37,6 +37,14 @@ class ROCAMerger(object):
             return False
         return True
 
+    def getCameraMeshList(self):
+        camera_mesh_list = []
+        for result in self.result_list:
+            if result.camera_instance is None:
+                continue
+            camera_mesh_list.append(result.camera_instance.world_mesh)
+        return camera_mesh_list
+
     def getResultMeshList(self, result_idx):
         result_mesh_list = []
 
@@ -100,6 +108,29 @@ class ROCAMerger(object):
             self.instance_set_list.append(instance_set)
         return True
 
+    def getInstanceSetMeshList(self, instance_set_idx):
+        instance_set_mesh_list = []
+
+        if instance_set_idx >= len(self.instance_set_list):
+            print("[ERROR][ROCAMerger::getInstanceSetMeshList]")
+            print("\t instance_set_idx out of range!")
+            return instance_set_mesh_list
+
+        instance_set = self.instance_set_list[instance_set_idx]
+        for instance in instance_set.instance_list:
+            instance_set_mesh_list.append(instance.world_mesh)
+            instance_set_mesh_list.append(instance.getOpen3DBBox([0, 255, 0]))
+
+        instance_set_mesh_list += self.getCameraMeshList()
+        return instance_set_mesh_list
+
+    def getInstanceSetListMeshList(self):
+        instance_set_list_mesh_list = []
+        for i in range(len(self.instance_set_list)):
+            instance_set_mesh_list = self.getInstanceSetMeshList(i)
+            instance_set_list_mesh_list += instance_set_mesh_list
+        return instance_set_list_mesh_list
+
     def renderResult3D(self, result_idx):
         if result_idx >= len(self.result_list):
             print("[ERROR][ROCAMerger::renderResult3D]")
@@ -131,8 +162,37 @@ class ROCAMerger(object):
         #  process.close()
         return True
 
-    def renderInstanceSet3D(self):
-        return
+    def renderInstanceSet3D(self, instance_set_idx):
+        if instance_set_idx >= len(self.instance_set_list):
+            print("[ERROR][ROCAMerger::renderInstanceSet3D]")
+            print("\t instance_set_idx out of range!")
+            return False
+
+        instance_set_mesh_list = self.getInstanceSetMeshList(instance_set_idx)
+        o3d.visualization.draw_geometries(instance_set_mesh_list)
+        return True
+
+    def renderInstanceSet3DWithProcess(self, instance_set_idx):
+        process = Process(target=self.renderInstanceSet3D, args=(instance_set_idx,))
+        process.start()
+        #  process.join()
+        #  process.close()
+        return True
+
+    def renderInstanceSetList3D(self):
+        if len(self.instance_set_list) == 0:
+            return True
+
+        instance_set_list_mesh_list = self.getInstanceSetListMeshList()
+        o3d.visualization.draw_geometries(instance_set_list_mesh_list)
+        return True
+
+    def renderInstanceSetList3DWithProcess(self):
+        process = Process(target=self.renderInstanceSetList3D)
+        process.start()
+        #  process.join()
+        #  process.close()
+        return True
 
 def demo():
     roca_merger = ROCAMerger()
