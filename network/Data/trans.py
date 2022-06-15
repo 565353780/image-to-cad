@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+from quaternion import quaternion
 
 from roca.utils.linalg import make_M_from_tqs
 
@@ -20,6 +21,14 @@ class Trans(object):
             self.rotation.tolist(),
             self.scale.tolist())
         return trans_matrix
+
+    def getQuaternion(self):
+        quat = quaternion(
+            self.rotation[0],
+            self.rotation[1],
+            self.rotation[2],
+            self.rotation[3])
+        return quat
 
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level

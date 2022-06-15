@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import numpy as np
+
 from Data.trans import Trans
 from Data.instance import Instance
 
@@ -15,12 +17,12 @@ class Result(object):
         self.camera_instance = None
         return
 
-    def getInstance(self, result_dict, instance_idx):
+    def getInstanceFromDict(self, result_dict, instance_idx):
         instances = result_dict["instances"]
         cad_ids = result_dict["cad_ids"]
         meshes = result_dict["meshes"]
         if instance_idx >= len(instances):
-            print("[ERROR][Result::getInstance]")
+            print("[ERROR][Result::getInstanceFromDict]")
             print("\t instance_idx out of range!")
             return None
 
@@ -62,7 +64,7 @@ class Result(object):
 
         instances = result_dict["instances"]
         self.instance_list = [
-            self.getInstance(result_dict, i) for i in range(len(instances))]
+            self.getInstanceFromDict(result_dict, i) for i in range(len(instances))]
 
         if not self.updateCameraInstance(result_dict):
             print("[ERROR][Result::loadResultDict]")
@@ -76,4 +78,8 @@ class Result(object):
 
         self.keep_list = getKeepList(self.instance_list, min_dist_3d)
         return True
+
+    def getKeepInstanceNum(self):
+        keep_true_num = np.sum(self.keep_list)
+        return keep_true_num
 

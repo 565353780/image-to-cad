@@ -1,18 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import numpy as np
 import open3d as o3d
 from multiprocessing import Process
 
 from Data.result import Result
+from Data.instance_set import InstanceSet
 
 class ROCAMerger(object):
     def __init__(self):
         self.result_list = []
+
+        self.instance_set_list = []
         return
 
     def reset(self):
         self.result_list = []
+
+        self.instance_set_list = []
         return True
 
     def addResult(self, result_dict, camera_pose):
@@ -22,6 +28,11 @@ class ROCAMerger(object):
             print("\t loadResultDict failed!")
             return False
         self.result_list.append(result)
+
+        if not self.mergeResult(len(self.result_list) - 1):
+            print("[ERROR][ROCAMerger::addResult]")
+            print("\t mergeResult failed!")
+            return False
         return True
 
     def getResultMeshList(self):
@@ -36,6 +47,30 @@ class ROCAMerger(object):
                 continue
             result_mesh_list.append(result.camera_instance.world_mesh)
         return result_mesh_list
+
+    def mergeResult(self, result_idx):
+        if result_idx >= len(self.result_list):
+            print("[ERROR][ROCAMerger::mergeResult]")
+            print("\t result_idx out of range!")
+            return False
+
+        result = self.result_list[result_idx]
+        if len(self.instance_set_list) == 0:
+            for instance, keep in zip(result.instance_list, result.keep_list):
+                if not keep:
+                    continue
+                instance_set = InstanceSet([instance])
+                self.instance_set_list.append(instance_set)
+            return True
+
+        instance_dist_matrix = np.zeros([len(self.instance_set_list), result.getKeepInstanceNum()])
+
+        for i in range(len(self.instance_set_list)):
+            instance_dist_list = self.instance_set_list[i].getInstanceDistList(result.instance_list,
+                                                                               result.keep_list)
+            instance_dist_matrix[i] = np.array(instance_dist_list)
+            print(instance_dist_matrix)
+        return True
 
     def render3D(self):
         if len(self.result_list) == 0:
