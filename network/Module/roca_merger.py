@@ -131,6 +131,22 @@ class ROCAMerger(object):
             instance_set_list_mesh_list += instance_set_mesh_list
         return instance_set_list_mesh_list
 
+    def getInstanceSetMeanMeshList(self, instance_set_idx):
+        if instance_set_idx >= len(self.instance_set_list):
+            print("[ERROR][ROCAMerger::getInstanceSetMeshList]")
+            print("\t instance_set_idx out of range!")
+            return []
+
+        instance_set = self.instance_set_list[instance_set_idx]
+        return [instance_set.getMeanMesh()]
+
+    def getInstanceSetListMeanMeshList(self):
+        instance_set_list_mean_mesh_list = []
+        for i in range(len(self.instance_set_list)):
+            instance_set_mean_mesh_list = self.getInstanceSetMeanMeshList(i)
+            instance_set_list_mean_mesh_list += instance_set_mean_mesh_list
+        return instance_set_list_mean_mesh_list
+
     def renderResult3D(self, result_idx):
         if result_idx >= len(self.result_list):
             print("[ERROR][ROCAMerger::renderResult3D]")
@@ -189,6 +205,38 @@ class ROCAMerger(object):
 
     def renderInstanceSetList3DWithProcess(self):
         process = Process(target=self.renderInstanceSetList3D)
+        process.start()
+        #  process.join()
+        #  process.close()
+        return True
+
+    def renderInstanceSetMean3D(self, instance_set_idx):
+        if instance_set_idx >= len(self.instance_set_list):
+            print("[ERROR][ROCAMerger::renderInstanceSetMean3D]")
+            print("\t instance_set_idx out of range!")
+            return False
+
+        instance_set_mean_mesh_list = self.getInstanceSetMeanMeshList(instance_set_idx)
+        o3d.visualization.draw_geometries(instance_set_mean_mesh_list)
+        return True
+
+    def renderInstanceSetMean3DWithProcess(self, instance_set_idx):
+        process = Process(target=self.renderInstanceSetMean3D, args=(instance_set_idx,))
+        process.start()
+        #  process.join()
+        #  process.close()
+        return True
+
+    def renderInstanceSetListMean3D(self):
+        if len(self.instance_set_list) == 0:
+            return True
+
+        instance_set_list_mean_mesh_list = self.getInstanceSetListMeanMeshList()
+        o3d.visualization.draw_geometries(instance_set_list_mean_mesh_list)
+        return True
+
+    def renderInstanceSetListMean3DWithProcess(self):
+        process = Process(target=self.renderInstanceSetListMean3D)
         process.start()
         #  process.join()
         #  process.close()

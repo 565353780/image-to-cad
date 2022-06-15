@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import numpy as np
+import open3d as o3d
+
+from Data.trans import Trans
+
+from Method.directions import getMatrixFromTrans
 from Method.dists import getInstanceDist
 
 class InstanceSet(object):
@@ -29,4 +35,32 @@ class InstanceSet(object):
             self.getInstanceDist(instance) for
             instance, keep in zip(instance_list, keep_list) if keep]
         return instance_dist_list
+
+    def getMeanMesh(self):
+        if len(self.instance_list) == 0:
+            return None
+
+        if len(self.instance_list) == 1:
+            return self.instance_list[0].world_mesh
+
+        mean_mesh = o3d.geometry.TriangleMesh(self.instance_list[0].mesh)
+        mean_mesh.transform(self.instance_list[0].getInverseTransMatrix())
+
+        mean_translation = np.array([0.0, 0.0, 0.0])
+        mean_rotation = np.array([0.0, 0.0, 0.0, 0.0])
+        mean_scale = np.array([0.0, 0.0, 0.0])
+        for instance in self.instance_list:
+            mean_translation += instance.world_trans.translation
+            mean_rotation += instance.world_trans.rotation
+            mean_scale += instance.world_trans.scale
+        mean_translation /= len(self.instance_list)
+        mean_rotation /= len(self.instance_list)
+        mean_scale /= len(self.instance_list)
+
+        mean_trans = Trans(mean_translation, mean_rotation, mean_scale)
+
+        mean_trans.outputInfo()
+
+        mean_mesh.transform(getMatrixFromTrans(mean_trans))
+        return mean_mesh
 

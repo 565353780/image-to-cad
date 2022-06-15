@@ -62,7 +62,8 @@ class ROCAManager(object):
                 self.convertResult()
                 #  self.roca_sim_detector.renderResultWithProcess(render_3d=False)
                 #  self.roca_merger.renderResultList3DWithProcess()
-                self.roca_merger.renderInstanceSetList3DWithProcess()
+                #  self.roca_merger.renderInstanceSetList3DWithProcess()
+                self.roca_merger.renderInstanceSetListMean3DWithProcess()
                 continue
             if not self.roca_sim_detector.sim_manager.keyBoardControl(input_key):
                 break
