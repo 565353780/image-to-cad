@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import numpy as np
 from math import sqrt
+from copy import deepcopy
 
 from habitat_sim_manage.Data.point import Point
 from habitat_sim.utils.common import quat_rotate_vector
@@ -50,4 +52,35 @@ def getInstanceDist(instance_1, instance_2):
     trans_dist = getTransDist(instance_1.world_trans, instance_2.world_trans)
     instance_dist = trans_dist
     return instance_dist
+
+def getMatchListFromMatrix(matrix):
+    inf = float("inf")
+
+    matrix_copy = deepcopy(matrix)
+
+    match_list = []
+    match_value_list = []
+
+    matrix_min_value = np.min(matrix_copy)
+    while matrix_min_value != inf:
+        min_idx = np.where(matrix_copy==matrix_min_value)
+        row = min_idx[0][0]
+        col = min_idx[1][0]
+
+        if len(match_value_list) > 0:
+            match_value_mean = np.mean(match_value_list)
+
+            new_match_value = matrix_copy[row][col]
+
+            if new_match_value > match_value_mean * 10:
+                break
+
+        match_list.append([row, col])
+        match_value_list.append(matrix_copy[row][col])
+
+        matrix_copy[row, :] = float("inf")
+        matrix_copy[:, col] = float("inf")
+
+        matrix_min_value = np.min(matrix_copy)
+    return match_list
 

@@ -14,6 +14,7 @@ class Result(object):
         self.camera_pose = camera_pose
 
         self.keep_list = []
+        self.keep_instance_idx_list = []
         self.camera_instance = None
         return
 
@@ -77,9 +78,14 @@ class Result(object):
             return False
 
         self.keep_list = getKeepList(self.instance_list, min_dist_3d)
+
+        for i in range(len(self.keep_list)):
+            if not self.keep_list[i]:
+                continue
+            self.keep_instance_idx_list.append(i)
         return True
 
     def getKeepInstanceNum(self):
-        keep_true_num = np.sum(self.keep_list)
+        keep_true_num = len(self.keep_instance_idx_list)
         return keep_true_num
 
