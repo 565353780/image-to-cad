@@ -56,3 +56,14 @@ class BBox(object):
         self.updateDiffPoint()
         return True
 
+    def outputInfo(self, info_level=0):
+        line_start = "\t" * info_level
+        print(line_start + "[BBox]")
+        print(line_start + "\t min_point =")
+        self.min_point.outputInfo(info_level + 1)
+        print(line_start + "\t max_point =")
+        self.max_point.outputInfo(info_level + 1)
+        print(line_start + "\t diff_point =")
+        self.diff_point.outputInfo(info_level + 1)
+        return True
+

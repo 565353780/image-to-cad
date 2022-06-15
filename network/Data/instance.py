@@ -5,13 +5,14 @@ import numpy as np
 import open3d as o3d
 
 from Config.matrix import INIT_MATRIX, SCENE_ROT
-from Config.bbox import getBBox
 
 from Data.trans import Trans
+from Data.bbox import BBox
 
 from Method.directions import \
     getTransFromMatrix, getMatrixFromTrans, \
     getMatrixFromPose
+from Method.bboxes import getOpen3DBBox
 
 class Instance(object):
     def __init__(self,
@@ -76,20 +77,27 @@ class Instance(object):
         inverse_world_trans_matrix = np.linalg.inv(world_trans_matrix)
         return inverse_world_trans_matrix
 
-    def getBBox(self):
-        bbox = getBBox()
+    def getOpen3DBBox(self):
+        bbox = getOpen3DBBox()
         bbox.transform(self.getWorldTransMatrix())
         return bbox
 
-    def getXYZBBox(self, color=[255, 0, 0]):
+    def getOpen3DXYZBBox(self, color=[255, 0, 0]):
         xyz_bbox = self.world_mesh.get_axis_aligned_bounding_box()
         xyz_bbox.color = np.array(color, dtype=np.float32) / 255.0
         return xyz_bbox
 
-    def getOrientedBBox(self, color=[255, 0, 0]):
+    def getOpen3DOrientedBBox(self, color=[255, 0, 0]):
         oriented_bbox = self.world_mesh.get_oriented_bounding_box()
         oriented_bbox.color = np.array(color, dtype=np.float32) / 255.0
         return oriented_bbox
+
+    def getBBox(self):
+        bbox = BBox()
+        xyz_bbox = self.getOpen3DXYZBBox()
+        center = xyz_bbox.get_center()
+        half_extent = xyz_bbox.get_half_extent()
+        return bbox
 
     def outputInfo(self, info_level=0):
         line_start = "\t" * info_level
