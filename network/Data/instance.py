@@ -7,7 +7,6 @@ import open3d as o3d
 from Config.matrix import INIT_MATRIX, SCENE_ROT
 
 from Data.trans import Trans
-from Data.bbox import BBox
 
 from Method.directions import \
     getTransFromMatrix, getMatrixFromTrans, \
@@ -27,6 +26,7 @@ class Instance(object):
 
         self.world_trans = None
         self.world_mesh = None
+        self.world_bbox = None
         return
 
     def updateWorldMesh(self):
@@ -53,6 +53,16 @@ class Instance(object):
             print("[ERROR][Instance::updateWorldTrans]")
             print("\t updateWorldMesh failed!")
             return False
+
+        if not self.updateWorldBBox():
+            print("[ERROR][Instance::updateWorldTrans]")
+            print("\t updateWorldBBox failed!")
+            return False
+        return True
+
+    def updateWorldBBox(self):
+        xyz_bbox = self.getOpen3DXYZBBox()
+        self.world_bbox = getBBoxFromOpen3DBBox(xyz_bbox)
         return True
 
     def getTransMatrix(self):
@@ -93,14 +103,8 @@ class Instance(object):
         oriented_bbox.color = np.array(color, dtype=np.float32) / 255.0
         return oriented_bbox
 
-    def getBBox(self):
-        xyz_bbox = self.getOpen3DXYZBBox()
-        bbox = getBBoxFromOpen3DBBox(xyz_bbox)
-        return bbox
-
     def getOpen3DBBox(self, color=[255, 0, 0]):
-        bbox = self.getBBox()
-        open3d_bbox = getOpen3DBBoxFromBBox(bbox, color)
+        open3d_bbox = getOpen3DBBoxFromBBox(self.world_bbox, color)
         return open3d_bbox
 
     def outputInfo(self, info_level=0):

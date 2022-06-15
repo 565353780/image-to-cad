@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from copy import deepcopy
 import numpy as np
 import open3d as o3d
 
@@ -39,8 +38,4 @@ def getOpen3DBBoxFromBBox(bbox, color=[255, 0, 0]):
     open3d_bbox = o3d.geometry.AxisAlignedBoundingBox.create_from_points(points)
     open3d_bbox.color = np.array(color, dtype=np.float32) / 255.0
     return open3d_bbox
-
-def getBBoxDist(bbox_1, bbox_2):
-    dist = 0
-    return dist
 
