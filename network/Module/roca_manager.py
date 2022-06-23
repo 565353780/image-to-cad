@@ -73,7 +73,7 @@ class ROCAManager(object):
 def demo():
     scene_name = "scene0474_02"
     glb_file_path = \
-        "/home/chli/habitat/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
+        "/home/chli/scan2cad/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
     control_mode = "pose"
     render_mode = "cv"
     wait_val = 1
