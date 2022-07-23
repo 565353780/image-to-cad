@@ -63,6 +63,9 @@ def getMatchListFromMatrix(matrix):
 
     matrix_min_value = np.min(matrix_copy)
     while matrix_min_value != inf:
+        if matrix_min_value > 1:
+            break
+
         min_idx = np.where(matrix_copy==matrix_min_value)
         row = min_idx[0][0]
         col = min_idx[1][0]
