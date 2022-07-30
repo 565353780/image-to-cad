@@ -143,3 +143,7 @@ network/output*
 # git
 habitat_sim_manage
 
+# ln
+Dataset
+Models
+
