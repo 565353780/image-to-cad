@@ -9,6 +9,8 @@ from trimesh.exchange.export import export_mesh
 from trimesh.util import concatenate as stack_meshes
 from multiprocessing import Process
 
+import sys
+sys.path.append("../network/")
 from roca.engine import Predictor
 
 class ROCADetector(object):
