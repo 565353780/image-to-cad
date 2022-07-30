@@ -79,9 +79,9 @@ def demo():
     wait_val = 1
 
     roca_settings = {
-        "model_path": "../Models/model_best.pth",
-        "data_dir": "../Data/Dataset/",
-        "config_path": "../Models/config.yaml",
+        "model_path": "./Models/model_best.pth",
+        "data_dir": "./Dataset/Dataset/",
+        "config_path": "./Models/config.yaml",
         "wild": False,
         "output_dir": "none",
     }

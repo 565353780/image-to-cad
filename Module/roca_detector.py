@@ -10,7 +10,7 @@ from trimesh.util import concatenate as stack_meshes
 from multiprocessing import Process
 
 import sys
-sys.path.append("../network/")
+sys.path.append("./network/")
 from roca.engine import Predictor
 
 class ROCADetector(object):
@@ -175,9 +175,9 @@ def demo():
     scene_name = "scene0474_02"
 
     roca_settings = {
-        "model_path": "../Models/model_best.pth",
-        "data_dir": "../Data/Dataset/",
-        "config_path": "../Models/config.yaml",
+        "model_path": "./Models/model_best.pth",
+        "data_dir": "./Dataset/Dataset/",
+        "config_path": "./Models/config.yaml",
         "wild": False,
         "output_dir": "none",
     }

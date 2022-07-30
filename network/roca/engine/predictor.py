@@ -65,7 +65,7 @@ class Predictor:
         self.model = model
         self.cad_manager = cad_manager
 
-        with open('./assets/camera.obj') as f:
+        with open('./network/assets/camera.obj') as f:
             cam = trimesh.load(f, file_type='obj', force='mesh')
         cam.apply_scale(0.25)
         cam.visual.face_colors = [100, 100, 100, 255]
