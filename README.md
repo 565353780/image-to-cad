@@ -72,10 +72,20 @@ pip install numpy, matplotlib
 
 ## Run
 
+### ROCA-Sim
+
 ```bash
 conda activate roca
 cd network
 python sim_demo.py
+```
+
+### ROCA-MultiViewMerge
+
+```bash
+conda activate roca
+cd network
+python roca_demo.py
 ```
 
 ## Enjoy it~
