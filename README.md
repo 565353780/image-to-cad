@@ -41,11 +41,8 @@ source setup.sh
 conda create -n roca python=3.8 -y
 conda activate roca
 
-cd ..
-git clone --recursive https://github.com/cangumeli/Scan2CADRasterizer.git
-cd Scan2CADRasterizer
-pip install .
-cd ../image-to-cad
+git clone --recursive https://github.com/cangumeli/Scan2CADRasterizer.git ../Scan2CADRasterizer
+pip install ../Scan2CADRasterizer
 
 pip install dataclasses opencv-python numpy-quaternion \
   pandas scipy trimesh rtree numba open3d==0.13.0
@@ -64,7 +61,7 @@ python -m pip install detectron2==0.3+cu110 -f \
 ## Install habitat-sim
 
 ```bash
-git clone https://github.com/565353780/habitat-sim-manage.git ./network/habitat_sim_manage
+git clone https://github.com/565353780/habitat-sim-manage.git ../habitat_sim_manage
 sudo apt install libassimp5 libassimp-dev libassimp-doc
 conda install habitat-sim -c conda-forge -c aihabitat
 pip install numpy, matplotlib
