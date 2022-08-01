@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append("./habitat_sim_manage/")
+sys.path.append("../")
+sys.path.append("../habitat_sim_manage")
 
 from getch import getch
 

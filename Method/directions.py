@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append("./habitat_sim_manage/")
+sys.path.append("../")
 
 import numpy as np
 from math import sqrt, atan2
