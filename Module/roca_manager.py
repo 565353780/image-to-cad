@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append("./habitat_sim_manage/")
+sys.path.append("../")
+sys.path.append("../habitat_sim_manage/")
 
 from getch import getch
 
@@ -33,9 +34,6 @@ class ROCAManager(object):
     def setControlMode(self, control_mode):
         return self.roca_sim_detector.setControlMode(control_mode)
 
-    def setRenderMode(self, render_mode):
-        return self.roca_sim_detector.setRenderMode(render_mode)
-
     def convertResult(self):
         result_dict = self.roca_sim_detector.getResultDict()
         self.roca_merger.addResult(
@@ -44,20 +42,20 @@ class ROCAManager(object):
 
     def startKeyBoardControlRender(self, wait_val):
         #  self.roca_sim_detector.sim_manager.resetAgentPose()
-        self.roca_sim_detector.sim_manager.sim_renderer.init()
+        self.roca_sim_detector.sim_manager.cv_renderer.init()
 
         while True:
-            if not self.roca_sim_detector.sim_manager.sim_renderer.renderFrame(
+            if not self.roca_sim_detector.sim_manager.cv_renderer.renderFrame(
                     self.roca_sim_detector.sim_manager.sim_loader.observations):
                 break
-            self.roca_sim_detector.sim_manager.sim_renderer.wait(wait_val)
+            self.roca_sim_detector.sim_manager.cv_renderer.waitKey(wait_val)
 
             agent_state = self.roca_sim_detector.sim_manager.sim_loader.getAgentState()
             print("agent_state: position", agent_state.position,
                   "rotation", agent_state.rotation)
 
             input_key = getch()
-            if input_key == "a":
+            if input_key == "x":
                 self.roca_sim_detector.detectObservations()
                 self.convertResult()
                 #  self.roca_sim_detector.renderResultWithProcess(render_3d=False)
@@ -67,7 +65,7 @@ class ROCAManager(object):
                 continue
             if not self.roca_sim_detector.sim_manager.keyBoardControl(input_key):
                 break
-        self.roca_sim_detector.sim_manager.sim_renderer.close()
+        self.roca_sim_detector.sim_manager.cv_renderer.close()
         return True
 
 def demo():
@@ -75,7 +73,6 @@ def demo():
     glb_file_path = \
         "/home/chli/scan2cad/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
     control_mode = "pose"
-    render_mode = "cv"
     wait_val = 1
 
     roca_settings = {
@@ -91,7 +88,6 @@ def demo():
     roca_manager.loadSettings(roca_settings, glb_file_path)
     roca_manager.updateSceneName(scene_name)
     roca_manager.setControlMode(control_mode)
-    roca_manager.setRenderMode(render_mode)
 
     roca_manager.roca_sim_detector.sim_manager.pose_controller.pose = Pose(
         Point(1.7, 1.5, -2.5), Rad(0.2, 0.0))
