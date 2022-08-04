@@ -24,8 +24,8 @@ class ROCAManager(object):
         self.roca_merger.reset()
         return True
 
-    def loadSettings(self, roca_settings, sim_settings=None):
-        return self.roca_sim_detector.loadSettings(roca_settings, sim_settings)
+    def loadSettings(self, roca_settings, glb_file_path):
+        return self.roca_sim_detector.loadSettings(roca_settings, glb_file_path)
 
     def updateSceneName(self, scene_name):
         return self.roca_sim_detector.updateSceneName(scene_name)
@@ -85,24 +85,10 @@ def demo():
         "wild": False,
         "output_dir": "none",
     }
-    sim_settings = {
-        "width": 480,
-        "height": 360,
-        "scene": glb_file_path,
-        "default_agent": 0,
-        "move_dist": 0.25,
-        "rotate_angle": 10.0,
-        "sensor_height": 0,
-        "color_sensor": True,
-        "depth_sensor": True,
-        "semantic_sensor": True,
-        "seed": 1,
-        "enable_physics": False,
-    }
 
     roca_manager = ROCAManager()
 
-    roca_manager.loadSettings(roca_settings, sim_settings)
+    roca_manager.loadSettings(roca_settings, glb_file_path)
     roca_manager.updateSceneName(scene_name)
     roca_manager.setControlMode(control_mode)
     roca_manager.setRenderMode(render_mode)

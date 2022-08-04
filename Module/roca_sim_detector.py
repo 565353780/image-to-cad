@@ -25,17 +25,13 @@ class ROCASimDetector(ROCADetector):
         self.sim_manager.reset()
         return True
 
-    def loadSettings(self, roca_settings, sim_settings=None):
-        super(ROCASimDetector, self).loadSettings(roca_settings)
-        if sim_settings is not None:
-            self.sim_manager.loadSettings(sim_settings)
+    def loadSettings(self, roca_settings, glb_file_path):
+        super().loadSettings(roca_settings)
+        self.sim_manager.loadSettings(glb_file_path)
         return True
 
     def setControlMode(self, control_mode):
         return self.sim_manager.setControlMode(control_mode)
-
-    def setRenderMode(self, render_mode):
-        return self.sim_manager.setRenderMode(render_mode)
 
     def detectObservations(self):
         if self.scene_name is None:
@@ -60,26 +56,26 @@ class ROCASimDetector(ROCADetector):
 
     def startKeyBoardControlRender(self, wait_val):
         #  self.sim_manager.resetAgentPose()
-        self.sim_manager.sim_renderer.init()
+        self.sim_manager.cv_renderer.init()
 
         while True:
-            if not self.sim_manager.sim_renderer.renderFrame(
+            if not self.sim_manager.cv_renderer.renderFrame(
                     self.sim_manager.sim_loader.observations):
                 break
-            self.sim_manager.sim_renderer.wait(wait_val)
+            self.sim_manager.cv_renderer.waitKey(wait_val)
 
             agent_state = self.sim_manager.sim_loader.getAgentState()
             print("agent_state: position", agent_state.position,
                   "rotation", agent_state.rotation)
 
             input_key = getch()
-            if input_key == "a":
+            if input_key == "x":
                 self.detectObservations()
                 self.renderResultWithProcess()
                 continue
             if not self.sim_manager.keyBoardControl(input_key):
                 break
-        self.sim_manager.sim_renderer.close()
+        self.sim_manager.cv_renderer.close()
         return True
 
 def demo_roca():
@@ -114,8 +110,7 @@ def demo_roca_sim():
     scene_name = "scene0474_02"
     glb_file_path = \
         "/home/chli/scan2cad/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
-    control_mode = "pose"
-    render_mode = "cv"
+    control_mode = "circle"
     wait_val = 1
 
     roca_settings = {
@@ -125,26 +120,11 @@ def demo_roca_sim():
         "wild": False,
         "output_dir": "none",
     }
-    sim_settings = {
-        "width": 480,
-        "height": 360,
-        "scene": glb_file_path,
-        "default_agent": 0,
-        "move_dist": 0.25,
-        "rotate_angle": 10.0,
-        "sensor_height": 0,
-        "color_sensor": True,
-        "depth_sensor": True,
-        "semantic_sensor": True,
-        "seed": 1,
-        "enable_physics": False,
-    }
 
     roca_sim_detector = ROCASimDetector()
-    roca_sim_detector.loadSettings(roca_settings, sim_settings)
+    roca_sim_detector.loadSettings(roca_settings, glb_file_path)
     roca_sim_detector.updateSceneName(scene_name)
     roca_sim_detector.setControlMode(control_mode)
-    roca_sim_detector.setRenderMode(render_mode)
 
     roca_sim_detector.sim_manager.pose_controller.pose = Pose(
         Point(1.7, 1.5, -2.5), Rad(0.2, 0.0))
