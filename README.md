@@ -24,7 +24,7 @@ and create a link
 
 ```bash
 ln -s <path-to-Models-folder> ./Models
-ln -s <path-to-Data-folder> ./Data
+ln -s <path-to-Data-folder> ./Dataset
 ```
 
 ## Install

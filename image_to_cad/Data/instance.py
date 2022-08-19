@@ -4,14 +4,14 @@
 import numpy as np
 import open3d as o3d
 
-from Config.matrix import INIT_MATRIX, SCENE_ROT
+from image_to_cad.Config.matrix import INIT_MATRIX, SCENE_ROT
 
-from Data.trans import Trans
+from image_to_cad.Data.trans import Trans
 
-from Method.directions import \
+from image_to_cad.Method.directions import \
     getTransFromMatrix, getMatrixFromTrans, \
     getMatrixFromPose
-from Method.bboxes import getOpen3DBBox, \
+from image_to_cad.Method.bboxes import getOpen3DBBox, \
     getBBoxFromOpen3DBBox, getOpen3DBBoxFromBBox
 
 class Instance(object):

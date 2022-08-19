@@ -6,9 +6,9 @@ import open3d as o3d
 
 from habitat_sim_manage.Data.point import Point
 
-from Config.bbox import POINTS, LINES, COLORS
+from image_to_cad.Config.bbox import POINTS, LINES, COLORS
 
-from Data.bbox import BBox
+from image_to_cad.Data.bbox import BBox
 
 def getOpen3DBBox():
     line_set = o3d.geometry.LineSet(

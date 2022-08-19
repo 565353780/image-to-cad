@@ -4,10 +4,10 @@
 import numpy as np
 import open3d as o3d
 
-from Data.trans import Trans
+from image_to_cad.Data.trans import Trans
 
-from Method.directions import getMatrixFromTrans
-from Method.dists import getInstanceDist
+from image_to_cad.Method.directions import getMatrixFromTrans
+from image_to_cad.Method.dists import getInstanceDist
 
 class InstanceSet(object):
     def __init__(self, instance_list=[]):

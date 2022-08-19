@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append("../")
-sys.path.append("../habitat_sim_manage/")
+sys.path.append("../habitat-sim-manage/")
 
 from getch import getch
 
@@ -11,8 +10,8 @@ from habitat_sim_manage.Data.point import Point
 from habitat_sim_manage.Data.rad import Rad
 from habitat_sim_manage.Data.pose import Pose
 
-from Module.roca_sim_detector import ROCASimDetector
-from Module.roca_merger import ROCAMerger
+from image_to_cad.Module.roca_sim_detector import ROCASimDetector
+from image_to_cad.Module.roca_merger import ROCAMerger
 
 class ROCAManager(object):
     def __init__(self):
@@ -71,7 +70,7 @@ class ROCAManager(object):
 def demo():
     scene_name = "scene0474_02"
     glb_file_path = \
-        "/home/chli/scan2cad/scannet/scans/scene0474_02/scene0474_02_vh_clean.glb"
+        "/home/chli/chLi/ScanNet/scans/scene0474_02/scene0474_02_vh_clean.glb"
     control_mode = "pose"
     wait_val = 1
 

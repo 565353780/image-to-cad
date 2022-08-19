@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from Data.trans import Trans
-from Data.instance import Instance
+from image_to_cad.Data.trans import Trans
+from image_to_cad.Data.instance import Instance
 
-from Method.nms import getKeepList
+from image_to_cad.Method.nms import getKeepList
 
 class Result(object):
     def __init__(self, instance_list=[], camera_pose=None):

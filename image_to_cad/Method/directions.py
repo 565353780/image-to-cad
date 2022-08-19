@@ -14,7 +14,7 @@ from habitat_sim.utils.common import \
 
 from habitat_sim_manage.Data.rad import Rad
 
-from Data.trans import Trans
+from image_to_cad.Data.trans import Trans
 
 def getTransFromMatrix(matrix):
     t, q, s = decompose_mat4(matrix)

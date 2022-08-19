@@ -5,10 +5,10 @@ import numpy as np
 import open3d as o3d
 from multiprocessing import Process
 
-from Data.result import Result
-from Data.instance_set import InstanceSet
+from image_to_cad.Data.result import Result
+from image_to_cad.Data.instance_set import InstanceSet
 
-from Method.dists import getMatchListFromMatrix
+from image_to_cad.Method.dists import getMatchListFromMatrix
 
 class ROCAMerger(object):
     def __init__(self):
