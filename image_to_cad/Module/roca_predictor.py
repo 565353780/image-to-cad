@@ -31,9 +31,9 @@ class Predictor:
             cfg.MODEL.WILD_RETRIEVAL_ON = True
         cfg.MODEL.INSTANCES_CONFIDENCE_THRESH = thresh
 
-        #  model = build_model(cfg)
         model = ROCA(cfg)
         model.to(torch.device("cuda"))
+
         backup = torch.load(model_path)
         model.load_state_dict(backup['model'])
 
@@ -54,8 +54,7 @@ class Predictor:
             register_scan2cad(data_name, {}, '', data_dir, '', '', 'train')
             cad_manager = CADCatalog.get(data_name)
             train_points, train_ids = cad_manager.batched_points_and_ids(
-                volumes=True
-            )
+                volumes=True)
             model.set_train_cads(train_points, train_ids)
             model.embed_train_cads()
 
