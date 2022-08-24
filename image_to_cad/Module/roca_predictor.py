@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
+sys.path.append("./network/")
+
 import torch
 import trimesh
 import numpy as np
