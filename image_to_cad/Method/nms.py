@@ -4,9 +4,9 @@
 import numpy as np
 
 def getKeepList(instance_list, min_dist_3d):
-    keeps = [True for _ in instance_list]
+    keep_list = [True for _ in instance_list]
     if min_dist_3d <= 0:
-        return keeps
+        return keep_list
     for i in range(len(instance_list)):
         instance = instance_list[i]
         for instance_ in instance_list:
@@ -15,7 +15,7 @@ def getKeepList(instance_list, min_dist_3d):
             if instance_.class_id == instance.class_id and \
                     instance_.score > instance.score and \
                     translation_diff < min_dist_3d:
-                keeps[i] = False
+                keep_list[i] = False
                 break
-    return keeps
+    return keep_list
 
