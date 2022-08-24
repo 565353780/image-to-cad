@@ -12,45 +12,43 @@ from roca.utils.misc import make_dense_volume
 
 class ROCA(GeneralizedRCNN):
     def forward(self,
-                batched_inputs,
-                detected_instances=None,
-                do_postprocess=True):
+                batched_inputs):
         images = self.preprocess_image(batched_inputs)
         features = self.backbone(images.tensor)
 
-        if not self.training:
-            if detected_instances is None:
-                if self.proposal_generator:
-                    proposals, _ = self.proposal_generator(images, features, None)
-                else:
-                    assert 'proposals' in batched_inputs[0]
-                    proposals = [
-                        x['proposals'].to(self.device) for x in batched_inputs
-                    ]
-                targets = [
-                    {'intrinsics': input['intrinsics'].to(self.device)}
-                    for input in batched_inputs
-                ]
-                scenes = [input['scene'] for input in batched_inputs]
-                results, extra_outputs = self.roi_heads(
-                    images,
-                    features,
-                    proposals,
-                    targets=targets,
-                    scenes=scenes
-                )
-            else:
-                detected_instances = [
-                    x.to(self.device) for x in detected_instances
-                ]
-                results = self.roi_heads.forward_with_given_boxes(
-                    features, detected_instances
-                )
+        gt_instances = None
+        if 'instances' in batched_inputs[0] and self.training:
+            gt_instances = [
+                x['instances'].to(self.device) for x in batched_inputs
+            ]
 
-            if do_postprocess:
-                results = self.__class__._postprocess(
-                    results, batched_inputs, images.image_sizes
-                )
+        # Extract the image depth
+        image_depths = []
+        for input in batched_inputs:
+            image_depths.append(input.pop('image_depth'))
+        image_depths = torch.cat(image_depths, dim=0).to(self.device)
+
+        if self.proposal_generator:
+            proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
+        else:
+            assert 'proposals' in batched_inputs[0]
+            proposals = [
+                x['proposals'].to(self.device)
+                for x in batched_inputs]
+            proposal_losses = {}
+
+        if not self.training:
+            targets = [
+                {'intrinsics': input['intrinsics'].to(self.device)}
+                for input in batched_inputs]
+            scenes = [input['scene'] for input in batched_inputs]
+
+            results, extra_outputs = self.roi_heads(
+                images, features, proposals,
+                targets=targets, scenes=scenes)
+
+            results = self.__class__._postprocess(
+                results, batched_inputs, images.image_sizes)
 
             # Attach image depths
             if 'pred_image_depths' in extra_outputs:
@@ -64,39 +62,12 @@ class ROCA(GeneralizedRCNN):
                     # indices are global, so all instances should have all CAD ids
                     for result in results:
                         result[cad_ids] = extra_outputs[cad_ids]
-
             return results
-
-        if 'instances' in batched_inputs[0]:
-            gt_instances = [
-                x['instances'].to(self.device) for x in batched_inputs
-            ]
-        else:
-            gt_instances = None
-
-        # Extract the image depth
-        image_depths = []
-        for input in batched_inputs:
-            image_depths.append(input.pop('image_depth'))
-        image_depths = torch.cat(image_depths, dim=0).to(self.device)
-
-        if not self.training:
-            return self.inference(batched_inputs)
-
-        if self.proposal_generator:
-            proposals, proposal_losses = self.proposal_generator(
-                images, features, gt_instances
-            )
-        else:
-            assert 'proposals' in batched_inputs[0]
-            proposals = [
-                x['proposals'].to(self.device) for x in batched_inputs
-            ]
-            proposal_losses = {}
 
         _, detector_losses = self.roi_heads(
             images, features, proposals, gt_instances, image_depths
         )
+
         if self.vis_period > 0:
             storage = get_event_storage()
             if storage.iter % self.vis_period == 0:
