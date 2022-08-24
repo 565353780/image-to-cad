@@ -17,7 +17,7 @@ from renderer.scan2cad_rasterizer import Rasterizer
 from image_to_cad.Model.roca import ROCA
 from image_to_cad.Method.nms import getKeepList
 
-class Predictor:
+class Predictor(object):
     def __init__(self, data_dir, model_path, config_path, thresh=0.5, wild=False):
         cfg = roca_config('Scan2CAD', 'Scan2CAD')
         cfg.merge_from_file(config_path)
@@ -70,10 +70,6 @@ class Predictor:
 
         print('\nDone building predictor\n')
         return
-
-    @property
-    def can_render(self):
-        return Rasterizer is not None
 
     @torch.no_grad()
     def __call__(self, image_rgb, f=435., scene='scene0474_02'):
@@ -147,10 +143,6 @@ class Predictor:
         return meshes
 
     def render_meshes(self, meshes, f= 435.):
-    #  ) -> Tuple[np.ndarray, np.ndarray]:
-        if Rasterizer is None:
-            raise ImportError('scan2cad-rasterizer not installed')
-
         inv_rot = np.linalg.inv(self.scene_rot)
         raster = Rasterizer(480, 360, f, f, 240., 180, False, True)
         colors = {}
@@ -166,7 +158,6 @@ class Predictor:
                 )
                 colors[i] = np.asarray(mesh.visual.face_colors)[0][:3] / 255
             else:
-                # Open3D
                 mesh = type(mesh)(mesh)
                 mesh.compute_triangle_normals()
                 mesh.transform(inv_rot)

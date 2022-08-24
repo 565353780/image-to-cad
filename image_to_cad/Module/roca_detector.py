@@ -41,11 +41,10 @@ class ROCADetector(object):
         return True
 
     def loadSettings(self, roca_settings):
-        self.predictor = Predictor(
-            data_dir=roca_settings["data_dir"],
-            model_path=roca_settings["model_path"],
-            config_path=roca_settings["config_path"],
-            wild=roca_settings["wild"])
+        self.predictor = Predictor(roca_settings["data_dir"],
+                                   roca_settings["model_path"],
+                                   roca_settings["config_path"],
+                                   wild=roca_settings["wild"])
 
         self.to_file = roca_settings["output_dir"] != "none"
         return True
@@ -79,15 +78,14 @@ class ROCADetector(object):
 
         self.masked_image = None
 
-        if self.predictor.can_render:
-            rendering, ids = self.predictor.render_meshes(self.meshes)
-            mask = ids > 0
-            self.masked_image = self.image.copy()
-            self.masked_image[mask] = np.clip(
-                0.8 * rendering[mask] * 255 + 0.2 * self.masked_image[mask],
-                0,
-                255
-            ).astype(np.uint8)
+        rendering, ids = self.predictor.render_meshes(self.meshes)
+        mask = ids > 0
+        self.masked_image = self.image.copy()
+        self.masked_image[mask] = np.clip(
+            0.8 * rendering[mask] * 255 + 0.2 * self.masked_image[mask],
+            0,
+            255
+        ).astype(np.uint8)
         return True
 
     def detectImage(self, image, scene_name=None):
@@ -121,14 +119,13 @@ class ROCADetector(object):
         return result_dict
 
     def renderResultImage(self):
-        if self.predictor.can_render:
-            if self.masked_image is None:
-                print("[ERROR][ROCADetector::renderResult]")
-                print("\t masked_image is None!")
-                return False
+        if self.masked_image is None:
+            print("[ERROR][ROCADetector::renderResult]")
+            print("\t masked_image is None!")
+            return False
 
-            img = o3d.geometry.Image(self.masked_image)
-            o3d.visualization.draw_geometries([img], height=480, width=640)
+        img = o3d.geometry.Image(self.masked_image)
+        o3d.visualization.draw_geometries([img], height=480, width=640)
         return True
 
     def renderResult3D(self):
