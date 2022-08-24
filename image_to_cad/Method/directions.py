@@ -2,12 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append("../")
+sys.path.append("../habitat-sim-manage/")
 
 import numpy as np
 from math import sqrt, atan2
-
-from roca.utils.linalg import make_M_from_tqs, decompose_mat4
 
 from habitat_sim.utils.common import \
     quat_from_angle_axis
@@ -15,6 +13,8 @@ from habitat_sim.utils.common import \
 from habitat_sim_manage.Data.rad import Rad
 
 from image_to_cad.Data.trans import Trans
+
+from image_to_cad.Method.matrix import make_M_from_tqs, decompose_mat4
 
 def getTransFromMatrix(matrix):
     t, q, s = decompose_mat4(matrix)

@@ -10,12 +10,12 @@ from network.roca.data import CADCatalog
 from network.roca.data.constants import CAD_TAXONOMY, COLOR_BY_CLASS
 from network.roca.data.datasets import register_scan2cad
 from network.roca.structures import Intrinsics
-from network.roca.utils.linalg import make_M_from_tqs
 
 from renderer.scan2cad_rasterizer import Rasterizer
 
 from image_to_cad.Model.roca import ROCA
 from image_to_cad.Method.nms import getKeepList
+from image_to_cad.Method.matrix import make_M_from_tqs
 
 class Predictor(object):
     def __init__(self, data_dir, model_path, config_path, thresh=0.5, wild=False):
