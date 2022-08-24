@@ -19,14 +19,7 @@ class ROCA(GeneralizedRCNN):
         gt_instances = None
         if 'instances' in batched_inputs[0] and self.training:
             gt_instances = [
-                x['instances'].to(self.device) for x in batched_inputs
-            ]
-
-        # Extract the image depth
-        image_depths = []
-        for input in batched_inputs:
-            image_depths.append(input.pop('image_depth'))
-        image_depths = torch.cat(image_depths, dim=0).to(self.device)
+                x['instances'].to(self.device) for x in batched_inputs]
 
         if self.proposal_generator:
             proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
@@ -63,6 +56,12 @@ class ROCA(GeneralizedRCNN):
                     for result in results:
                         result[cad_ids] = extra_outputs[cad_ids]
             return results
+
+        # Extract the image depth
+        image_depths = []
+        for input in batched_inputs:
+            image_depths.append(input.pop('image_depth'))
+        image_depths = torch.cat(image_depths, dim=0).to(self.device)
 
         _, detector_losses = self.roi_heads(
             images, features, proposals, gt_instances, image_depths

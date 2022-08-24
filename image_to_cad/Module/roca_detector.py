@@ -11,7 +11,8 @@ from multiprocessing import Process
 
 import sys
 sys.path.append("./network/")
-from roca.engine import Predictor
+#  from roca.engine import Predictor
+from image_to_cad.Module.roca_predictor import Predictor
 
 class ROCADetector(object):
     def __init__(self):
