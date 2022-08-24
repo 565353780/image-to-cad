@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from typing import Any, Dict, List, Optional, Union
-
 import torch
 
 from detectron2.modeling import GeneralizedRCNN, META_ARCH_REGISTRY
@@ -13,11 +11,62 @@ from roca.data.constants import VOXEL_RES
 from roca.utils.misc import make_dense_volume
 
 class ROCA(GeneralizedRCNN):
-    def forward(self, batched_inputs: List[Any]):
-        if not self.training:
-            return self.inference(batched_inputs)
-
+    def forward(self,
+                batched_inputs,
+                detected_instances=None,
+                do_postprocess=True):
         images = self.preprocess_image(batched_inputs)
+        features = self.backbone(images.tensor)
+
+        if not self.training:
+            if detected_instances is None:
+                if self.proposal_generator:
+                    proposals, _ = self.proposal_generator(images, features, None)
+                else:
+                    assert 'proposals' in batched_inputs[0]
+                    proposals = [
+                        x['proposals'].to(self.device) for x in batched_inputs
+                    ]
+                targets = [
+                    {'intrinsics': input['intrinsics'].to(self.device)}
+                    for input in batched_inputs
+                ]
+                scenes = [input['scene'] for input in batched_inputs]
+                results, extra_outputs = self.roi_heads(
+                    images,
+                    features,
+                    proposals,
+                    targets=targets,
+                    scenes=scenes
+                )
+            else:
+                detected_instances = [
+                    x.to(self.device) for x in detected_instances
+                ]
+                results = self.roi_heads.forward_with_given_boxes(
+                    features, detected_instances
+                )
+
+            if do_postprocess:
+                results = self.__class__._postprocess(
+                    results, batched_inputs, images.image_sizes
+                )
+
+            # Attach image depths
+            if 'pred_image_depths' in extra_outputs:
+                pred_image_depths = extra_outputs['pred_image_depths'].unbind(0)
+                for depth, result in zip(pred_image_depths, results):
+                    result['pred_image_depth'] = depth
+            
+            # Attach CAD ids
+            for cad_ids in ('cad_ids', 'wild_cad_ids'):
+                if cad_ids in extra_outputs:
+                    # indices are global, so all instances should have all CAD ids
+                    for result in results:
+                        result[cad_ids] = extra_outputs[cad_ids]
+
+            return results
+
         if 'instances' in batched_inputs[0]:
             gt_instances = [
                 x['instances'].to(self.device) for x in batched_inputs
@@ -31,8 +80,8 @@ class ROCA(GeneralizedRCNN):
             image_depths.append(input.pop('image_depth'))
         image_depths = torch.cat(image_depths, dim=0).to(self.device)
 
-        # Run the network
-        features = self.backbone(images.tensor)
+        if not self.training:
+            return self.inference(batched_inputs)
 
         if self.proposal_generator:
             proposals, proposal_losses = self.proposal_generator(
@@ -57,82 +106,6 @@ class ROCA(GeneralizedRCNN):
         losses.update(detector_losses)
         losses.update(proposal_losses)
         return losses
-
-    def inference(
-        self,
-        batched_inputs: List[Any],
-        detected_instances: Optional[List[Instances]] =None,
-        do_postprocess: bool = True
-    ) -> Union[List[Instances], Dict[str, Any]]:
-        """
-        Run inference on the given inputs.
-
-        Args:
-            batched_inputs (list[dict]): same as in :meth:`forward`
-            detected_instances (None or list[Instances]): if not None, it
-                contains an `Instances` object per image. The `Instances`
-                object contains "pred_boxes" and "pred_classes" which are
-                known boxes in the image.
-                The inference will then skip the detection of bounding boxes,
-                and only predict other per-ROI outputs.
-            do_postprocess (bool): whether to apply post-processing on the outputs.
-
-        Returns:
-            When do_postprocess=True, same as in :meth:`forward`.
-            Otherwise, a list[Instances] containing raw network outputs.
-        """
-        assert not self.training
-
-        images = self.preprocess_image(batched_inputs)
-        features = self.backbone(images.tensor)
-
-        if detected_instances is None:
-            if self.proposal_generator:
-                proposals, _ = self.proposal_generator(images, features, None)
-            else:
-                assert 'proposals' in batched_inputs[0]
-                proposals = [
-                    x['proposals'].to(self.device) for x in batched_inputs
-                ]
-            targets = [
-                {'intrinsics': input['intrinsics'].to(self.device)}
-                for input in batched_inputs
-            ]
-            scenes = [input['scene'] for input in batched_inputs]
-            results, extra_outputs = self.roi_heads(
-                images,
-                features,
-                proposals,
-                targets=targets,
-                scenes=scenes
-            )
-        else:
-            detected_instances = [
-                x.to(self.device) for x in detected_instances
-            ]
-            results = self.roi_heads.forward_with_given_boxes(
-                features, detected_instances
-            )
-
-        if do_postprocess:
-            results = self.__class__._postprocess(
-                results, batched_inputs, images.image_sizes
-            )
-
-        # Attach image depths
-        if 'pred_image_depths' in extra_outputs:
-            pred_image_depths = extra_outputs['pred_image_depths'].unbind(0)
-            for depth, result in zip(pred_image_depths, results):
-                result['pred_image_depth'] = depth
-        
-        # Attach CAD ids
-        for cad_ids in ('cad_ids', 'wild_cad_ids'):
-            if cad_ids in extra_outputs:
-                # indices are global, so all instances should have all CAD ids
-                for result in results:
-                    result[cad_ids] = extra_outputs[cad_ids]
-
-        return results
 
     @property
     def retrieval_head(self):
