@@ -1,27 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-sys.path.append("./network/")
-
-import numpy as np
 import torch
 import trimesh
-
-from detectron2.modeling import build_model
-from detectron2.structures import Instances
+import numpy as np
 
 from network.roca.config import roca_config
 from network.roca.data import CADCatalog
 from network.roca.data.constants import CAD_TAXONOMY, COLOR_BY_CLASS
 from network.roca.data.datasets import register_scan2cad
 from network.roca.structures import Intrinsics
-from network.roca.utils.alignment_errors import translation_diff
 from network.roca.utils.linalg import make_M_from_tqs
 
-from image_to_cad.Model.roca import ROCA
-
 from renderer.scan2cad_rasterizer import Rasterizer
+
+from image_to_cad.Model.roca import ROCA
+from image_to_cad.Method.nms import getKeepList
 
 class Predictor:
     def __init__(self, data_dir, model_path, config_path, thresh=0.5, wild=False):
@@ -75,7 +69,6 @@ class Predictor:
         ])
 
         print('\nDone building predictor\n')
-        #  exit()
         return
 
     @property
@@ -84,19 +77,16 @@ class Predictor:
 
     @torch.no_grad()
     def __call__(self, image_rgb, f=435., scene='scene0474_02'):
-            #  Tuple[Instances, List[Tuple[str, str]]]:
-        inputs = {'scene': scene}
-        inputs['image'] = torch.as_tensor(
-            np.ascontiguousarray(image_rgb[:, :, ::-1].transpose(2, 0, 1))
-        )
-        if isinstance(f, np.ndarray):
-            inputs['intrinsics'] = f[:3, :3]
-        else:
-            inputs['intrinsics'] = Intrinsics(torch.tensor([
+        inputs = {
+            'scene': scene,
+            'image': torch.as_tensor(
+                np.ascontiguousarray(image_rgb[:, :, ::-1].transpose(2, 0, 1))),
+            'intrinsics': Intrinsics(torch.tensor([
                 [f, 0., image_rgb.shape[1] / 2],
                 [0., f, image_rgb.shape[0] / 2],
-                [0., 0., 1.]
-            ]))
+                [0., 0., 1.]])),
+            }
+
         outputs = self.model([inputs])[0]
         cad_ids = outputs['wild_cad_ids'] if self.wild else outputs['cad_ids']
         return outputs['instances'].to('cpu'), cad_ids
@@ -106,7 +96,6 @@ class Predictor:
                        excluded_classes=(),
                        nms_3d=True,
                        as_open3d=False):
-            #  Union[List[trimesh.Trimesh], List[Any]]:
         meshes = []
         trans_cls_scores = []
         for i in range(len(instances)):
@@ -145,7 +134,7 @@ class Predictor:
             meshes.append(mesh)
 
         if nms_3d:
-            keeps = self._3d_nms(trans_cls_scores, min_dist_3d)
+            keeps = getKeepList(trans_cls_scores, min_dist_3d)
             meshes = [m for m, b in zip(meshes, keeps) if b]
 
         if as_open3d:
@@ -194,15 +183,3 @@ class Predictor:
         raster.render_colors(0.2)
         return raster.read_color(), raster.read_idx()
 
-    @staticmethod
-    def _3d_nms(tcs, min_dist):
-        keeps = [True for _ in tcs]
-        if min_dist <= 0:
-            return keeps
-        for i, (t, c, s) in enumerate(tcs):
-            if any(
-                c_ == c and s_ > s and translation_diff(t_, t) < min_dist
-                for t_, c_, s_ in tcs
-            ):
-                keeps[i] = False
-        return keeps
