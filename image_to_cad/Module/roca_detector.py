@@ -4,6 +4,7 @@
 import os
 import numpy as np
 import open3d as o3d
+from tqdm import tqdm
 from PIL import Image
 from trimesh.exchange.export import export_mesh
 from trimesh.util import concatenate as stack_meshes
@@ -188,11 +189,11 @@ def demo():
         'desk': 'scene0474_02',
     }
 
-    for name in scene_name_dict.keys():
+    for name in tqdm(scene_name_dict.keys()):
         scene_name = scene_name_dict[name]
-        roca_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
+        roca_detector.detectImageFromPath('./network/assets/' + name + '.jpg', scene_name)
         result = roca_detector.getResultDict()
-        roca_detector.renderResult()
+        #  roca_detector.renderResultImage()
     return True
 
 if __name__ == '__main__':
