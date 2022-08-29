@@ -3,8 +3,7 @@
 
 import torch
 
-from detectron2.modeling import GeneralizedRCNN, META_ARCH_REGISTRY
-from detectron2.structures import Instances
+from detectron2.modeling import GeneralizedRCNN
 from detectron2.utils.events import get_event_storage
 
 from roca.data.constants import VOXEL_RES
