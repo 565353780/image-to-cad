@@ -6,12 +6,11 @@ import torch
 from detectron2.modeling import GeneralizedRCNN
 from detectron2.utils.events import get_event_storage
 
-from roca.data.constants import VOXEL_RES
-from roca.utils.misc import make_dense_volume
+from network.roca.data.constants import VOXEL_RES
+from network.roca.utils.misc import make_dense_volume
 
 class ROCA(GeneralizedRCNN):
-    def forward(self,
-                batched_inputs):
+    def forward(self, batched_inputs):
         images = self.preprocess_image(batched_inputs)
         features = self.backbone(images.tensor)
 
