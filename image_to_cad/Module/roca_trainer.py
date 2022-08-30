@@ -21,7 +21,6 @@ TRAIN_CONFIG = {
     "full_annot": "./Dataset/full_annotations.json",
 
     "output_dir": "./output/",
-    "override_output": 0,
 
     "lr": 1e-3,
     "max_iter": 80000,
@@ -56,8 +55,8 @@ TRAIN_CONFIG = {
     "e2e": 1,
 
     "eval_only": 0,
-    "checkpoint": "",
-    "resume": 0,
+    "checkpoint": "./output/last_checkpoint",
+    "resume": 1,
 
     "seed": 2021,
 }
@@ -136,9 +135,7 @@ def make_config(config):
 
 def setup_output_dir(config, cfg):
     output_dir = config["output_dir"]
-    assert not config["resume"] or path.isdir(config["output_dir"]), \
-        'No backup found in {}'.format(config["output_dir"])
-    makedirs(output_dir, exist_ok=config["override_output"] or config["resume"])
+    makedirs(output_dir, exist_ok=True)
 
     if not config["eval_only"] and not config["resume"]:
         # Save command line arguments
