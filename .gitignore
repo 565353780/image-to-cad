@@ -147,3 +147,6 @@ habitat_sim_manage
 Dataset
 Models
 
+# train output
+output
+
