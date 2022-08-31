@@ -11,17 +11,15 @@ import random
 import numpy as np
 import os.path as path
 from os import makedirs
+from tqdm import tqdm
 from detectron2.solver import build_lr_scheduler, build_optimizer
-from detectron2.data import (
-    build_detection_train_loader,
-    get_detection_dataset_dicts,
-)
+from detectron2.data import \
+    build_detection_train_loader, get_detection_dataset_dicts,
 from detectron2.utils.events import EventStorage
 
 from network.roca.config import roca_config
 from network.roca.data import CategoryCatalog, Mapper
 from network.roca.data.datasets import register_scan2cad
-from network.roca.engine import Trainer
 
 from image_to_cad.Config.config import TRAIN_CONFIG
 
@@ -118,7 +116,7 @@ def build_train_loader(cfg):
     datasets = cfg.DATASETS.TRAIN
     assert len(datasets) == 1
     workers = cfg.SOLVER.WORKERS
-    mapper = Mapper(cfg, is_train=True, dataset_name=datasets[0])
+    mapper = Mapper(cfg, True, datasets[0])
     seed = cfg.SEED
     if seed > 0:
         torch.manual_seed(seed)
@@ -128,22 +126,6 @@ def build_train_loader(cfg):
     return build_detection_train_loader(cfg,
                                         mapper=mapper,
                                         num_workers=workers)
-
-class ROCATrainerExample(Trainer):
-    def __init__(self, config):
-        self.cfg = make_config(config)
-        super().__init__(self.cfg)
-        setup_output_dir(config, self.cfg)
-        self.resume_or_load(resume=config["resume"])
-        return
-
-    def train(self):
-        super().train()
-        return True
-
-    def test(self):
-        super().test(self.cfg, self.model)
-        return True
 
 class ROCATrainer(object):
     def __init__(self, config):
@@ -158,7 +140,7 @@ class ROCATrainer(object):
         self._data_loader_iter = iter(self.data_loader)
 
         self.iter = self.start_iter = 0
-        self.max_iter = 80000
+        self.max_iter = config["steps"][0]
 
         self.model.requires_grad_()
         self._init_val_step()
@@ -197,11 +179,7 @@ class ROCATrainer(object):
 
             dataset = get_detection_dataset_dicts(self.cfg.DATASETS.TEST)
             num_workers = self.cfg.SOLVER.WORKERS
-            mapper = Mapper(
-                self.cfg,
-                is_train=True,
-                dataset_name=test_datasets[0]
-            )
+            mapper = Mapper(self.cfg, True, test_datasets[0])
             self._sample_val_data = build_detection_train_loader(
                 mapper=mapper,
                 dataset=dataset,
@@ -236,7 +214,7 @@ class ROCATrainer(object):
         return True
 
     def train(self):
-        for self.iter in range(self.start_iter, self.max_iter):
+        for self.iter in tqdm(range(self.start_iter, self.max_iter)):
             self.train_step()
             self.eval_step()
         return True
@@ -244,10 +222,7 @@ class ROCATrainer(object):
 def demo():
     register_data(TRAIN_CONFIG)
 
-    #  roca_trainer_example = ROCATrainerExample(TRAIN_CONFIG)
     roca_trainer = ROCATrainer(TRAIN_CONFIG)
-
-    #  roca_trainer_example.train()
     roca_trainer.train()
     return True
 
