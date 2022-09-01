@@ -12,6 +12,7 @@ import numpy as np
 import os.path as path
 from os import makedirs
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.data import \
     build_detection_train_loader, get_detection_dataset_dicts
@@ -24,6 +25,8 @@ from network.roca.data.datasets import register_scan2cad
 from image_to_cad.Config.config import TRAIN_CONFIG
 
 from image_to_cad.Model.roca import ROCA
+
+from image_to_cad.Method.time import getCurrentTimeStr
 
 def register_data(config):
     data_dir = config["data_dir"]
@@ -137,6 +140,9 @@ class ROCATrainer(object):
         self.data_loader = build_train_loader(self.cfg)
         self.scheduler = build_lr_scheduler(self.cfg, self.optimizer)
 
+        self.output_folder_path = config["output_dir"] + getCurrentTimeStr() + "/"
+        self.writter = SummaryWriter(self.output_folder_path)
+
         self._data_loader_iter = iter(self.data_loader)
 
         self.iter = self.start_iter = 0
@@ -196,6 +202,11 @@ class ROCATrainer(object):
         with EventStorage(self.iter) as self.storage:
             loss_dict = self.model(data)
 
+        for key, item in loss_dict.items():
+            self.writer.add_scalar("train/" + key, item, self.iter)
+        train_total_loss = sum(loss_dict.values())
+        self.writer.add_scalar("train/total_loss", train_total_loss, self.iter)
+
         losses = sum(loss_dict.values())
 
         self.optimizer.zero_grad()
@@ -211,7 +222,9 @@ class ROCATrainer(object):
                 with EventStorage(self.iter) as self.storage:
                     val_loss_dict = self.model(data)
                 val_loss_dict['total_loss'] = sum(val_loss_dict.values())
-                print(val_loss_dict)
+
+                for key, item in val_loss_dict.items():
+                    self.writer.add_scalar("val/" + key, item, self.iter)
         return True
 
     def train(self):
