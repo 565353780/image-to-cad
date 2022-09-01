@@ -4,6 +4,6 @@
 from datetime import datetime
 
 def getCurrentTimeStr():
-    current_time_str = datetime.now().strptime('%Y-%m-%d_%H:%M:%S')
+    current_time_str = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     return current_time_str
 
