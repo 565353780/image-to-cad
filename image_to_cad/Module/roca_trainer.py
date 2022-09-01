@@ -148,6 +148,7 @@ class ROCATrainer(object):
 
         self.iter = self.start_iter = 0
         self.max_iter = config["steps"][0]
+        self.eval_period = config["eval_period"]
 
         self.do_val_step = True
 
@@ -231,7 +232,8 @@ class ROCATrainer(object):
     def train(self):
         for self.iter in tqdm(range(self.start_iter, self.max_iter)):
             self.train_step()
-            self.eval_step()
+            if self.iter % self.eval_period == 0:
+                self.eval_step()
         return True
 
 def demo():
