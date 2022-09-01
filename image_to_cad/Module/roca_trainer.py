@@ -140,8 +140,9 @@ class ROCATrainer(object):
         self.data_loader = build_train_loader(self.cfg)
         self.scheduler = build_lr_scheduler(self.cfg, self.optimizer)
 
-        self.output_folder_path = config["output_dir"] + getCurrentTimeStr() + "/"
-        self.writter = SummaryWriter(self.output_folder_path)
+        output_folder_path = config["output_dir"] + "logs/" + getCurrentTimeStr() + "/"
+        os.makedirs(output_folder_path, exist_ok=True)
+        self.writer = SummaryWriter(output_folder_path)
 
         self._data_loader_iter = iter(self.data_loader)
 
