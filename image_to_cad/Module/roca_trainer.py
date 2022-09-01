@@ -14,7 +14,7 @@ from os import makedirs
 from tqdm import tqdm
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.data import \
-    build_detection_train_loader, get_detection_dataset_dicts,
+    build_detection_train_loader, get_detection_dataset_dicts
 from detectron2.utils.events import EventStorage
 
 from network.roca.config import roca_config
@@ -142,6 +142,8 @@ class ROCATrainer(object):
         self.iter = self.start_iter = 0
         self.max_iter = config["steps"][0]
 
+        self.do_val_step = True
+
         self.model.requires_grad_()
         self._init_val_step()
 
@@ -171,7 +173,6 @@ class ROCATrainer(object):
         return True
 
     def _init_val_step(self):
-        self.do_val_step = self.cfg.SOLVER.EVAL_STEP
         if self.do_val_step:
             test_datasets = self.cfg.DATASETS.TEST
             assert len(test_datasets) == 1, \
@@ -190,25 +191,25 @@ class ROCATrainer(object):
         return True
 
     def train_step(self):
-        with EventStorage(self.start_iter) as self.storage:
-            self.storage.iter = self.iter
+        data = next(self._data_loader_iter)
 
-            data = next(self._data_loader_iter)
-
+        with EventStorage(self.iter) as self.storage:
             loss_dict = self.model(data)
-            losses = sum(loss_dict.values())
 
-            self.optimizer.zero_grad()
-            losses.backward()
+        losses = sum(loss_dict.values())
 
-            self.optimizer.step()
+        self.optimizer.zero_grad()
+        losses.backward()
+
+        self.optimizer.step()
         return True
 
     def eval_step(self):
         with torch.no_grad():
             if self.do_val_step:
                 data = next(self._sample_val_iter)
-                val_loss_dict = self.model(data)
+                with EventStorage(self.iter) as self.storage:
+                    val_loss_dict = self.model(data)
                 val_loss_dict['total_loss'] = sum(val_loss_dict.values())
                 print(val_loss_dict)
         return True
