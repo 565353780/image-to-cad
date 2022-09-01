@@ -13,7 +13,7 @@ TRAIN_CONFIG = {
     "max_iter": 80000,
     "batch_size": 4,
     "num_proposals": 128,
-    "eval_period": 2500,
+    "eval_period": 100,
     "freq_scale": "image", # ['none', 'image', 'cad]
 
     "steps": [60000],
