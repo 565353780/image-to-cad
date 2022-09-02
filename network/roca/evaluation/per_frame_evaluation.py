@@ -77,8 +77,13 @@ class InstanceEvaluator(DatasetEvaluator):
             labels = chain(*(v['labels'] for v in ap_values))
             scores, labels = map(torch.as_tensor, map(list, (scores, labels)))
             npos = sum(v['npos'] for v in ap_values)
+            # chLi: fix call .item() for float bug
+            try:
+                ap = compute_ap(scores, labels, npos).item()
+            except:
+                ap = compute_ap(scores, labels, npos)
             gAPs[f] = np.round(
-                compute_ap(scores, labels, npos).item() * 100,
+                ap * 100,
                 decimals=2
             ).item()
 
@@ -86,11 +91,16 @@ class InstanceEvaluator(DatasetEvaluator):
         per_class_aps = {f: {} for f in per_class_ap_data.keys()}
         for f, ap_dict in per_class_aps.items():
             for cat, ap_data in per_class_ap_data[f].items():
-                ap_dict[cat] = compute_ap(
-                    torch.as_tensor(ap_data['scores']),
-                    torch.as_tensor(ap_data['labels']),
-                    ap_data['npos']
-                ).item()
+                # chLi: fix call .item() for float bug
+                try:
+                    ap = compute_ap(torch.as_tensor(ap_data['scores']),
+                                    torch.as_tensor(ap_data['labels']),
+                                    ap_data['npos']).item()
+                except:
+                    ap = compute_ap(torch.as_tensor(ap_data['scores']),
+                                    torch.as_tensor(ap_data['labels']),
+                                    ap_data['npos'])
+                ap_dict[cat] = ap
 
         # Average and report category APs
         mAPs = {}
