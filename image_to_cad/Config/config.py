@@ -41,8 +41,9 @@ TRAIN_CONFIG = {
     "confidence_thresh_test": 0.5,
     "e2e": 1,
 
-    "checkpoint": "./output/last_checkpoint",
-    "resume": 1,
+    #  "checkpoint": "./output/last_checkpoint",
+    "checkpoint": "",
+    "resume": 0,
 
     "seed": 2021,
 }
