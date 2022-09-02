@@ -164,3 +164,4 @@ class ROCA(GeneralizedRCNN):
         if 'inject' in k or 'eject' in k or k == 'set_verbose':
             return getattr(self.roi_heads, k)
         return super().__getattr__(k)
+
