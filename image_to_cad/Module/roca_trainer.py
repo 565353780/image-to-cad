@@ -21,6 +21,7 @@ from detectron2.utils.events import EventStorage
 from network.roca.config import roca_config
 from network.roca.data import CategoryCatalog, Mapper
 from network.roca.data.datasets import register_scan2cad
+from network.roca.engine.trainer import Trainer
 
 from image_to_cad.Config.config import TRAIN_CONFIG
 
@@ -129,6 +130,22 @@ def build_train_loader(cfg):
     return build_detection_train_loader(cfg,
                                         mapper=mapper,
                                         num_workers=workers)
+
+class SourceROCATrainer(Trainer):
+    def __init__(self, config):
+        self.cfg = make_config(config)
+        setup_output_dir(config, self.cfg)
+        super().__init__(self.cfg)
+        self.resume_or_load(resume=config["resume"])
+        return
+
+    def train(self):
+        super().train()
+        return True
+
+    def eval(self):
+        super().test(self.cfg, self.model)
+        return True
 
 class ROCATrainer(object):
     def __init__(self, config):
@@ -239,7 +256,11 @@ class ROCATrainer(object):
 def demo():
     register_data(TRAIN_CONFIG)
 
-    roca_trainer = ROCATrainer(TRAIN_CONFIG)
-    roca_trainer.train()
+    source_roca_trainer = SourceROCATrainer(TRAIN_CONFIG)
+    source_roca_trainer.train()
+
+    #  roca_trainer = ROCATrainer(TRAIN_CONFIG)
+    #  roca_trainer.train()
+
     return True
 
