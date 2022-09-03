@@ -29,12 +29,11 @@ from image_to_cad.Method.alignment_ops import \
 from image_to_cad.Model.retrieval.retrieval_head import RetrievalHead
 
 class AlignmentHead(nn.Module):
-    def __init__(self, cfg, num_classes: int, input_channels: int, log_window):
+    def __init__(self, cfg, num_classes, input_channels):
         super().__init__()
 
         self.num_classes = num_classes
         self.output_grid_size = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION * 2
-        self.log_window = log_window
 
         # Init the shape feature aggregator
         input_size = input_channels
@@ -441,12 +440,11 @@ class AlignmentHead(nn.Module):
             )
 
             # Log metrics to tensorboard
-            self.log_window.log_metrics(lambda: depth_metrics(
-                depths,
-                gt_depths,
-                gt_masks,
-                pref='depth/roi_'
-            ))
+            matric_dict = depth_metrics(depths, gt_depths, gt_masks,
+                                        pref='depth/roi_')
+            print("[INFO][AlignmentHead::_forward_roi_depth]")
+            print("\t depth_metrics")
+            print(matric_dict)
 
             # Mask the output depths for further use
             depths = depths * pred_masks
