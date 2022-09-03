@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import torch
 import torch.nn as nn
+import numpy as np
 
 class Sobel(nn.Module):
     def __init__(self):

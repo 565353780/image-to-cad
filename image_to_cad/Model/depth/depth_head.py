@@ -4,14 +4,14 @@
 import torch
 import torch.nn as nn
 
+from image_to_cad.Loss.loss_functions import \
+    cosine_distance, inverse_huber_loss, masked_l1_loss
+
 from image_to_cad.Metric.logging_metrics import depth_metrics
 
 from image_to_cad.Model.depth.depth_features import DepthFeatures
 from image_to_cad.Model.depth.depth_output import DepthOutput
 from image_to_cad.Model.depth.sobel import Sobel
-
-from image_to_cad.Loss.loss_functions import \
-    cosine_distance, inverse_huber_loss, masked_l1_loss
 
 class DepthHead(nn.Module):
     def __init__(self, cfg, in_features):
