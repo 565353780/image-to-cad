@@ -26,49 +26,27 @@ class ROCAROIHeads(StandardROIHeads):
         super().__init__(cfg, input_shape)
         self.set_verbose(False)
 
-        self._init_class_weights(cfg)
-        self._customize_box_head(cfg)
-        self._init_depth_head(cfg)
-        self._init_alignment_head(cfg)
+        self.init_class_weights(cfg)
+
+        self.box_predictor = WeightedFastRCNNOutputLayers(cfg, self.box_head.output_shape)
+        self.depth_head = DepthHead(cfg, self.in_features)
+        self.alignment_head = AlignmentHead(cfg, self.num_classes, self.depth_head.out_channels)
+        self.mask_head.predictor = nn.Conv2d(
+            self.mask_head.deconv.out_channels, self.num_classes + 1, kernel_size=(1, 1))
 
         self.output_grid_size = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION * 2
 
         self.test_min_score = cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST
         return
 
-    def _init_class_weights(self, cfg):
-        class_weights = cfg.MODEL.CLASS_SCALES
-        self.use_class_weights = bool(class_weights)
-        if self.use_class_weights:
-            class_weight_tensor = torch.zeros(1 + len(class_weights))
-            for i, scale in class_weights:
-                class_weight_tensor[i + 1] = scale
-            class_weight_tensor[0] = torch.max(class_weight_tensor[1:])
-            self.register_buffer('class_weights', class_weight_tensor)
-
-    def _customize_box_head(self, cfg):
-        if not self.use_class_weights:
-            return
-        del self.box_predictor
-        self.box_predictor = WeightedFastRCNNOutputLayers(
-            cfg, self.box_head.output_shape
-        )
-
-    def _init_depth_head(self, cfg):
-        self.depth_head = DepthHead(cfg, self.in_features)
-
-    def _init_alignment_head(self, cfg):
-        self.alignment_head = AlignmentHead(
-            cfg,
-            self.num_classes,
-            self.depth_head.out_channels)
-        self.per_category_mask = cfg.MODEL.ROI_HEADS.PER_CATEGORY_MASK
-        if self.per_category_mask:
-            self.mask_head.predictor = nn.Conv2d(
-                self.mask_head.deconv.out_channels,
-                self.num_classes + 1,
-                kernel_size=(1, 1)
-            )
+    def init_class_weights(self, cfg):
+        self.class_weights = cfg.MODEL.CLASS_SCALES
+        class_weight_tensor = torch.zeros(1 + len(self.class_weights))
+        for i, scale in self.class_weights:
+            class_weight_tensor[i + 1] = scale
+        class_weight_tensor[0] = torch.max(class_weight_tensor[1:])
+        self.register_buffer('class_weights', class_weight_tensor)
+        return
 
     @property
     def has_cads(self):
@@ -81,21 +59,15 @@ class ROCAROIHeads(StandardROIHeads):
     def forward(self, images, features, proposals,
                 targets=None, gt_depths=None, scenes=None):
         image_size = images[0].shape[-2:]  # Assume single image size!
-        del images
+
         if self.training:
             assert targets
             assert gt_depths is not None
             proposals = self.label_and_sample_proposals(proposals, targets)
-        else:
-            inference_args = targets  # Extra arguments for inference
-        del targets
 
-        if self.training:
             losses = self._forward_box(features, proposals)
 
-            depth_losses, depths, depth_features = self._forward_image_depth(
-                features, gt_depths
-            )
+            depth_losses, depths, depth_features = self.depth_head(features, gt_depths)
             losses.update(depth_losses)
 
             losses.update(self._forward_alignment(
@@ -108,9 +80,11 @@ class ROCAROIHeads(StandardROIHeads):
             ))
             return proposals, losses
 
+        inference_args = targets  # Extra arguments for inference
+
         pred_instances = self._forward_box(features, proposals)
 
-        pred_depths, depth_features = self._forward_image_depth(features)
+        pred_depths, depth_features = self.depth_head(features, None)
         extra_outputs = {'pred_image_depths': pred_depths}
 
         pred_instances, alignment_outputs = self._forward_alignment(
@@ -127,12 +101,8 @@ class ROCAROIHeads(StandardROIHeads):
         return pred_instances, extra_outputs
 
     def _forward_box(self, *args, **kwargs):
-        if self.use_class_weights:
-            self.box_predictor.set_class_weights(self.class_weights)
+        self.box_predictor.set_class_weights(self.class_weights)
         return super()._forward_box(*args, **kwargs)
-
-    def _forward_image_depth(self, features, depth_gt=None):
-        return self.depth_head(features, depth_gt)
 
     def _forward_alignment(self, features, instances, image_size,
                            depths,depth_features, inference_args=None,
@@ -175,10 +145,7 @@ class ROCAROIHeads(StandardROIHeads):
         gt_classes = L.cat([p.gt_classes for p in instances])
 
         # Get class weight for losses
-        if self.use_class_weights:
-            class_weights = self.class_weights[gt_classes + 1]
-        else:
-            class_weights = None
+        class_weights = self.class_weights[gt_classes + 1]
 
         # Create xy-grids for back-projection and cropping, respectively
         xy_grid, xy_grid_n = create_xy_grids(
@@ -253,12 +220,7 @@ class ROCAROIHeads(StandardROIHeads):
     def _forward_mask(self, features, classes, instances=None,
                       xy_grid_n=None, class_weights=None):
         mask_logits = self.mask_head.layers(features)
-        if self.per_category_mask:
-            mask_logits = select_classes(
-                mask_logits,
-                self.num_classes + 1,
-                classes
-            )
+        mask_logits = select_classes(mask_logits, self.num_classes + 1, classes)
 
         if self.training:
             assert instances is not None
@@ -281,10 +243,10 @@ class ROCAROIHeads(StandardROIHeads):
             )
 
             # Log the mask performance and then convert mask_pred to float
-            matric_dict = mask_metrics(mask_pred, mask_gt.bool())
+            metric_dict = mask_metrics(mask_pred, mask_gt.bool())
             print("[INFO][ROCAROIHeads::_forward_mask]")
             print("\t mask_metrics")
-            print(matric_dict)
+            print(metric_dict)
 
             mask_pred = mask_pred.to(mask_gt.dtype)
 
