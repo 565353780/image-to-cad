@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 import detectron2.layers as L
-from detectron2.structures import Boxes, Instances
+from detectron2.structures import Boxes
 
 from image_to_cad.Data.coordinates.depths import Depths
 from image_to_cad.Data.camera.intrinsics import Intrinsics
@@ -106,13 +106,14 @@ class AlignmentHead(nn.Module):
         # Initialize the retrieval head
         self.retrieval_head = RetrievalHead(cfg, shape_code_size)
         self.wild_retrieval = cfg.MODEL.WILD_RETRIEVAL_ON
+        return
 
     @property
-    def has_cads(self) -> bool:
+    def has_cads(self):
         return self.retrieval_head.has_cads
 
     @property
-    def device(self) -> torch.device:
+    def device(self):
         return next(self.parameters()).device
 
     def forward(self, *args, **kwargs):
@@ -121,22 +122,10 @@ class AlignmentHead(nn.Module):
         else:
             return self.forward_inference(*args, **kwargs)
 
-    def forward_training(
-        self,
-        instances: List[Instances],
-        depth_features: torch.Tensor,
-        depths: torch.Tensor,
-        gt_depths: torch.Tensor,
-        image_size: Tuple[int, int],
-        gt_classes: torch.Tensor,
-        class_weights: Optional[torch.Tensor],
-        xy_grid: torch.Tensor,
-        xy_grid_n: torch.Tensor,
-        mask_pred: torch.Tensor,
-        mask_probs: torch.Tensor,
-        mask_gt: torch.Tensor
-    ) -> Dict[str, torch.Tensor]:
-
+    def forward_training(self, instances, depth_features, depths,
+                         gt_depths, image_size, gt_classes,
+                         class_weights, xy_grid, xy_grid_n,
+                         mask_pred, mask_probs, mask_gt):
         losses = {}
 
         proposal_boxes = [x.proposal_boxes for x in instances]
@@ -225,15 +214,15 @@ class AlignmentHead(nn.Module):
 
     def forward_inference(
         self,
-        instances: List[Instances],
-        depth_features: torch.Tensor,
-        depths: torch.Tensor,
-        image_size: torch.Tensor,
-        mask_probs: torch.Tensor,
-        mask_pred: torch.Tensor,
-        inference_args: List[Dict[str, Any]],
-        scenes: List[str]
-    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
+        instances,
+        depth_features,
+        depths,
+        image_size,
+        mask_probs,
+        mask_pred,
+        inference_args,
+        scenes
+    ):
 
         instance_sizes = [len(x) for x in instances]
         num_instances = sum(instance_sizes)
