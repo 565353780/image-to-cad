@@ -152,7 +152,6 @@ class ROCATrainer(object):
         self.cfg = make_config(config)
         setup_output_dir(config, self.cfg)
         self.model = ROCA(self.cfg)
-        exit()
         self.model.to(torch.device("cuda"))
         self.optimizer = build_optimizer(self.cfg, self.model)
         self.data_loader = build_train_loader(self.cfg)
