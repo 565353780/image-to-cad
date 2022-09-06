@@ -4,9 +4,10 @@
 import torch
 import torch.nn as nn
 
+from detectron2.layers import ShapeSpec
 from detectron2.structures import ImageList
-from detectron2.modeling.backbone import build_backbone
 from detectron2.modeling.proposal_generator.rpn import RPN
+from detectron2.modeling.backbone.fpn import build_resnet_fpn_backbone
 from detectron2.modeling.postprocessing import detector_postprocess
 
 from image_to_cad.Config.roca.constants import VOXEL_RES
@@ -18,7 +19,8 @@ from image_to_cad.Model.roi.roi_head import ROCAROIHeads
 class ROCA(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.backbone = build_backbone(cfg)
+        input_shape = ShapeSpec(channels=len(cfg.MODEL.PIXEL_MEAN))
+        self.backbone = build_resnet_fpn_backbone(cfg, input_shape)
         self.proposal_generator = RPN(cfg, self.backbone.output_shape())
         self.roi_heads = ROCAROIHeads(cfg, self.backbone.output_shape())
         self.input_format = cfg.INPUT.FORMAT
