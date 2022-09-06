@@ -30,8 +30,6 @@ class DepthHead(nn.Module):
             up_ratio
         )
 
-        print("DepthHead in!")
-        print(cfg.MODEL.DEPTH_GRAD_LOSSES)
         if cfg.MODEL.DEPTH_GRAD_LOSSES:
             self.sobel = Sobel()
 
