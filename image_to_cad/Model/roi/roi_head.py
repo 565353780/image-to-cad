@@ -40,9 +40,9 @@ class ROCAROIHeads(StandardROIHeads):
         return
 
     def init_class_weights(self, cfg):
-        self.class_weights = cfg.MODEL.CLASS_SCALES
-        class_weight_tensor = torch.zeros(1 + len(self.class_weights))
-        for i, scale in self.class_weights:
+        class_weights = cfg.MODEL.CLASS_SCALES
+        class_weight_tensor = torch.zeros(1 + len(class_weights))
+        for i, scale in class_weights:
             class_weight_tensor[i + 1] = scale
         class_weight_tensor[0] = torch.max(class_weight_tensor[1:])
         self.register_buffer('class_weights', class_weight_tensor)
