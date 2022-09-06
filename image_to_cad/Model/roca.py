@@ -6,20 +6,21 @@ import torch.nn as nn
 
 from detectron2.structures import ImageList
 from detectron2.modeling.backbone import build_backbone
-from detectron2.modeling.proposal_generator import build_proposal_generator
-from detectron2.modeling.roi_heads import build_roi_heads
-
+from detectron2.modeling.proposal_generator.rpn import RPN
 from detectron2.modeling.postprocessing import detector_postprocess
 
-from network.roca.data.constants import VOXEL_RES
-from network.roca.utils.misc import make_dense_volume
+from image_to_cad.Config.roca.constants import VOXEL_RES
+
+from image_to_cad.Method.misc import make_dense_volume
+
+from image_to_cad.Model.roi.roi_head import ROCAROIHeads
 
 class ROCA(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.backbone = build_backbone(cfg)
-        self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
-        self.roi_heads = build_roi_heads(cfg, self.backbone.output_shape())
+        self.proposal_generator = RPN(cfg, self.backbone.output_shape())
+        self.roi_heads = ROCAROIHeads(cfg, self.backbone.output_shape())
         self.input_format = cfg.INPUT.FORMAT
         self.vis_period = cfg.VIS_PERIOD
         pixel_mean = cfg.MODEL.PIXEL_MEAN
@@ -37,19 +38,13 @@ class ROCA(nn.Module):
         return self.pixel_mean.device
 
     def preprocess_image(self, batched_inputs):
-        """
-        Normalize, pad and batch the input images.
-        """
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         return images
 
     @staticmethod
-    def _postprocess(instances, batched_inputs, image_sizes):
-        """
-        Rescale the output instances to the target size.
-        """
+    def postprocess(instances, batched_inputs, image_sizes):
         # note: private function; subject to changes
         processed_results = []
         for results_per_image, input_per_image, image_size in zip(
@@ -97,7 +92,7 @@ class ROCA(nn.Module):
             images, features, proposals,
             targets=targets, scenes=scenes)
 
-        results = self.__class__._postprocess(
+        results = self.postprocess(
             results, batched_inputs, images.image_sizes)
 
         # Attach image depths
