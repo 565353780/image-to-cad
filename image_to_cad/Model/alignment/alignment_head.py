@@ -58,34 +58,16 @@ class AlignmentHead(nn.Module):
             3 * self.num_classes,
             num_hiddens=2)
 
-        # Init translation head
-        self.per_category_trans = cfg.MODEL.ROI_HEADS.PER_CATEGORY_TRANS
-
         self.trans_head = MLP(
             3 + shape_code_size,
-            3 * (self.num_classes if self.per_category_trans else 1),
+            3 * self.num_classes,
             num_hiddens=1)
 
-        self.e2e = cfg.MODEL.ROI_HEADS.E2E
-        self.use_noc_embedding = cfg.MODEL.ROI_HEADS.NOC_EMBED
-        self.per_category_noc = cfg.MODEL.ROI_HEADS.PER_CATEGORY_NOC
         self.min_nocs = cfg.MODEL.ROI_HEADS.NOC_MIN
-        self.use_noc_weights = cfg.MODEL.ROI_HEADS.NOC_WEIGHTS
-        self.use_noc_weight_head = cfg.MODEL.ROI_HEADS.NOC_WEIGHT_HEAD and self.e2e
-        self.use_noc_weight_skip = cfg.MODEL.ROI_HEADS.NOC_WEIGHT_SKIP and self.e2e
-        self.irls_iters = cfg.MODEL.ROI_HEADS.IRLS_ITERS
-
-        embed_size = 0
-        if self.use_noc_embedding:
-            self.noc_embed = nn.Embedding(self.num_classes, 32)
-            embed_size = self.noc_embed.embedding_dim
 
         # code + depth_points + scale + embedding
-        noc_code_size = shape_code_size + 3 + 3 + embed_size
-        noc_output_size = (
-            3 * self.num_classes
-            if self.per_category_noc
-            else 3)
+        noc_code_size = shape_code_size + 3 + 3 + 0
+        noc_output_size = 3
 
         self.noc_head = SharedMLP(
             noc_code_size,
@@ -93,15 +75,14 @@ class AlignmentHead(nn.Module):
             output_size=noc_output_size
         )
 
-        if self.use_noc_weight_head:
-            self.noc_weight_head = SharedMLP(
-                # noc code + noc + mask prob
-                noc_code_size + 3 + 1,
-                num_hiddens=1,
-                # hidden_size=512,
-                output_size=self.num_classes,
-                output_activation=nn.Sigmoid
-            )
+        # use_noc_weight_head:
+        self.noc_weight_head = SharedMLP(
+            # noc code + noc + mask prob
+            noc_code_size + 3 + 1,
+            num_hiddens=1,
+            # hidden_size=512,
+            output_size=self.num_classes,
+            output_activation=nn.Sigmoid)
 
         # Initialize the retrieval head
         self.retrieval_head = RetrievalHead(cfg, shape_code_size)
@@ -121,6 +102,118 @@ class AlignmentHead(nn.Module):
             return self.forward_training(*args, **kwargs)
         else:
             return self.forward_inference(*args, **kwargs)
+
+    def forward_new(
+        self,
+        instances,
+        depth_features,
+        depths,
+        image_size,
+        mask_probs,
+        mask_pred,
+        inference_args=None,
+        scenes=None,
+        gt_depths=None,
+        gt_classes=None,
+        class_weights=None,
+        xy_grid=None,
+        xy_grid_n=None,
+        mask_gt=None
+    ):
+        losses = {}
+        predictions = {}
+
+        instance_sizes = [len(x) for x in instances]
+
+        if self.training:
+            pred_boxes = [x.proposal_boxes for x in instances]
+        else:
+            num_instances = sum(instance_sizes)
+            if num_instances == 0:
+                return self.identity()
+            pred_boxes = [x.pred_boxes for x in instances]
+
+        shape_code = self._encode_shape(
+            pred_boxes,
+            mask_pred,
+            depth_features,
+            image_size
+        )
+
+        alignment_sizes = torch.tensor(instance_sizes, device=self.device)
+
+        if self.training:
+            intrinsics = Intrinsics.cat(
+                [p.gt_intrinsics for p in instances]
+            ).tensor.inverse()
+        else:
+            intrinsics = Intrinsics.cat(
+                [arg['intrinsics'] for arg in inference_args]
+            ).tensor.inverse()
+            if intrinsics.size(0) > 1:
+                intrinsics = intrinsics.repeat_interleave(
+                    alignment_sizes, dim=0
+                )
+
+            xy_grid, xy_grid_n = create_xy_grids(
+                Boxes.cat(pred_boxes),
+                image_size,
+                num_instances,
+                self.output_grid_size
+            )
+
+        depths, depth_points, raw_depth_points, depth_losses, gt_depths, gt_depth_points = \
+            self._forward_roi_depth(
+                xy_grid,
+                depths,
+                mask_pred,
+                intrinsics,
+                xy_grid_n,
+                alignment_sizes,
+                gt_masks=mask_gt,
+                gt_depths=gt_depths,
+                class_weights=class_weights
+            )
+
+        if self.training:
+            losses.update(depth_losses)
+
+        alignment_classes = gt_classes
+        forward_instances = instances
+        if not self.training:
+            pred_classes = [x.pred_classes for x in instances]
+            alignment_classes = L.cat(pred_classes)
+            forward_instances = None
+
+        scale_pred, scale_losses, scale_gt = self._forward_scale(
+            shape_code,
+            alignment_classes,
+            instances=forward_instances,
+            class_weights=class_weights
+        )
+        predictions['pred_scales'] = scale_pred
+
+        if self.training:
+            losses.update(scale_losses)
+
+        trans_pred, trans_losses, trans_gt = self._forward_trans(
+            shape_code,
+            depths,
+            depth_points,
+            alignment_classes,
+            instances=forward_instances,
+            gt_depth_points=gt_depth_points,
+            gt_depths=gt_depths,
+            class_weights=class_weights
+        )
+        predictions['pred_translations'] = trans_pred
+
+        if self.training:
+            losses.update(trans_losses)
+
+
+
+        return True
 
     def forward_training(self, instances, depth_features, depths,
                          gt_depths, image_size, gt_classes,
@@ -146,23 +239,23 @@ class AlignmentHead(nn.Module):
             [p.gt_intrinsics for p in instances]
         ).tensor.inverse()
 
-        depth_losses, depth_pred, depth_gt = self._forward_roi_depth(
-            xy_grid,
-            depths,
-            mask_pred,
-            intrinsics,
-            xy_grid_n,
-            instance_sizes,
-            gt_masks=mask_gt,
-            gt_depths=gt_depths,
-            class_weights=class_weights
-        )
-        depth_pred, depth_points_pred = depth_pred
-        depth_gt, depth_points_gt = depth_gt
+        depth_pred, depth_points_pred, _, depth_losses, depth_gt, depth_points_gt = \
+            self._forward_roi_depth(
+                xy_grid,
+                depths,
+                mask_pred,
+                intrinsics,
+                xy_grid_n,
+                instance_sizes,
+                gt_masks=mask_gt,
+                gt_depths=gt_depths,
+                class_weights=class_weights
+            )
+
         losses.update(depth_losses)
 
         # Scale
-        scale_losses, scale_pred, scale_gt = self._forward_scale(
+        scale_pred, scale_losses, scale_gt = self._forward_scale(
             shape_code,
             gt_classes,
             instances=instances,
@@ -247,7 +340,7 @@ class AlignmentHead(nn.Module):
             image_size
         )
 
-        pred_scales = self._forward_scale(shape_code, pred_classes)
+        pred_scales, _, _ = self._forward_scale(shape_code, pred_classes)
         predictions['pred_scales'] = pred_scales
 
         # Predict translation and perform procrustes
@@ -270,7 +363,7 @@ class AlignmentHead(nn.Module):
             num_instances,
             self.output_grid_size
         )
-        depths, depth_points, raw_depth_points = self._forward_roi_depth(
+        depths, depth_points, raw_depth_points, _, _, _ = self._forward_roi_depth(
             xy_grid,
             depths,
             pred_masks,
@@ -369,24 +462,25 @@ class AlignmentHead(nn.Module):
         instances=None,
         class_weights=None
     ):
+        losses = {}
+
         scales = select_classes(
             self.scale_head(shape_code),
             self.num_classes,
             alignment_classes
         )
 
+        gt_scales = None
         if self.training:
             assert instances is not None
-            losses = {}
             gt_scales = Scales.cat([p.gt_scales for p in instances]).tensor
             losses['loss_scale'] = l1_loss(
                 scales,
                 gt_scales,
                 weights=class_weights
             )
-            return losses, scales, gt_scales
-        else:
-            return scales
+
+        return scales, losses, gt_scales
 
     def _forward_roi_depth(
         self,
@@ -400,6 +494,8 @@ class AlignmentHead(nn.Module):
         gt_depths=None,
         class_weights=None
     ):
+        losses = {}
+
         depths, depth_points = self._crop_and_project_depth(
             xy_grid,
             depths,
@@ -407,11 +503,11 @@ class AlignmentHead(nn.Module):
             xy_grid_n,
             alignment_sizes
         )
+
+
         if self.training:
             assert gt_masks is not None
             assert gt_depths is not None
-
-            losses = {}
 
             gt_depths, gt_depth_points = self._crop_and_project_depth(
                 xy_grid,
@@ -429,15 +525,19 @@ class AlignmentHead(nn.Module):
             )
 
             # Log metrics to tensorboard
-            matric_dict = depth_metrics(depths, gt_depths, gt_masks,
+            metric_dict = depth_metrics(depths, gt_depths, gt_masks,
                                         pref='depth/roi_')
             print("[INFO][AlignmentHead::_forward_roi_depth]")
             print("\t depth_metrics")
-            print(matric_dict)
+            print(metric_dict)
 
-            # Mask the output depths for further use
-            depths = depths * pred_masks
-            depth_points = depth_points * pred_masks
+        raw_depth_points = depth_points.clone()
+        depths *= pred_masks
+        depth_points *= pred_masks
+
+        gt_depths = None
+        gt_depth_points = None
+        if self.training:
             gt_depths = gt_depths * gt_masks
             gt_depth_points = gt_depth_points * gt_masks
 
@@ -451,12 +551,7 @@ class AlignmentHead(nn.Module):
                 weights=class_weights
             )
 
-            return losses, (depths, depth_points), (gt_depths, gt_depth_points)
-        else:
-            raw_depth_points = depth_points.clone()
-            depths *= pred_masks
-            depth_points *= pred_masks
-            return depths, depth_points, raw_depth_points
+        return depths, depth_points, raw_depth_points, losses, gt_depths, gt_depth_points
 
     def _crop_and_project_depth(
         self,
@@ -491,6 +586,8 @@ class AlignmentHead(nn.Module):
         gt_depths=None,
         class_weights=None
     ):
+        losses = {}
+
         depth_center, depth_min, depth_max = depth_bbox_center(
             depth_points, depths
         )
@@ -499,20 +596,21 @@ class AlignmentHead(nn.Module):
             dim=-1
         )
         trans_offset = self.trans_head(trans_code)
-        if self.per_category_trans:
-            trans_offset = select_classes(
-                trans_offset,
-                self.num_classes,
-                alignment_classes
-            )
+
+        # per_category_trans:
+        trans_offset = select_classes(
+            trans_offset,
+            self.num_classes,
+            alignment_classes
+        )
+
         trans = depth_center + trans_offset
 
+        trans_gt = None
         if self.training:
             assert instances is not None
             assert gt_depth_points is not None
             assert gt_depths is not None
-
-            losses = {}
 
             depth_min_gt, depth_max_gt = depth_bbox(gt_depth_points, gt_depths)
             losses['loss_depth_min'] = smooth_l1_loss(
@@ -534,9 +632,7 @@ class AlignmentHead(nn.Module):
                 weights=class_weights
             )
 
-            return losses, trans, trans_gt
-        else:  # inference
-            return trans
+        return trans, losses, trans_gt
 
     def _forward_proc(
         self,
@@ -566,8 +662,6 @@ class AlignmentHead(nn.Module):
             alignment_classes
         )
         nocs = self.noc_head(noc_codes)
-        if self.per_category_noc:
-            nocs = select_classes(nocs, self.num_classes, alignment_classes)
         raw_nocs = nocs
         nocs = masks * nocs
 
@@ -613,7 +707,7 @@ class AlignmentHead(nn.Module):
                 weights=class_weights
             )
 
-            if self.e2e and do_proc:
+            if do_proc:
                 if class_weights is not None:
                     class_weights = class_weights[has_enough]
 
@@ -643,8 +737,8 @@ class AlignmentHead(nn.Module):
             return rot, nocs, raw_nocs
 
     def _encode_shape_grid(self, shape_code, depth_points, scale, classes):
-        if self.use_noc_embedding:
-            shape_code = L.cat([shape_code, self.noc_embed(classes)], dim=-1)
+        #  if self.use_noc_embedding:
+            #  shape_code = L.cat([shape_code, self.noc_embed(classes)], dim=-1)
 
         shape_code_grid = shape_code\
             .view(*shape_code.size(), 1, 1)\
@@ -682,8 +776,7 @@ class AlignmentHead(nn.Module):
             depth_points[has_enough],
             proc_masks,
             weights=mask_probs,
-            num_iter=self.irls_iters
-        )
+            num_iter=1)
 
     def _prep_mask_probs(
         self,
@@ -693,31 +786,24 @@ class AlignmentHead(nn.Module):
         alignment_classes,
         has_enough=None
     ):
-        if self.use_noc_weights:
-            assert mask_probs is not None
-            if has_enough is not None:
-                mask_probs = mask_probs[has_enough]
-                noc_codes = noc_codes[has_enough]
-                nocs = nocs[has_enough]
-                alignment_classes = alignment_classes[has_enough]
+        # use_noc_weights:
+        assert mask_probs is not None
+        if has_enough is not None:
+            mask_probs = mask_probs[has_enough]
+            noc_codes = noc_codes[has_enough]
+            nocs = nocs[has_enough]
+            alignment_classes = alignment_classes[has_enough]
 
-            if self.use_noc_weight_head:
-                weight_inputs = [noc_codes, nocs.detach(), mask_probs.detach()]
+        # use_noc_weight_head:
+        weight_inputs = [noc_codes, nocs.detach(), mask_probs.detach()]
 
-                new_probs = select_classes(
-                    self.noc_weight_head(L.cat(weight_inputs, dim=1)),
-                    self.num_classes,
-                    alignment_classes
-                )
+        new_probs = select_classes(
+            self.noc_weight_head(L.cat(weight_inputs, dim=1)),
+            self.num_classes,
+            alignment_classes
+        )
 
-                # mask_probs = (1 - interp) * mask_probs + interp * new_probs
-                if self.use_noc_weight_skip:
-                    mask_probs = (mask_probs + new_probs) / 2
-                else:
-                    mask_probs = new_probs
-        else:  # not self.use_noc_weights
-            mask_probs = None
-
+        mask_probs = new_probs
         return mask_probs
 
     def _forward_retrieval_train(self, instances, mask, nocs, shape_code):
