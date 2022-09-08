@@ -208,11 +208,47 @@ class AlignmentHead(nn.Module):
         )
         predictions['pred_translations'] = trans_pred
 
+        proc_depth_points = raw_depth_points
         if self.training:
+            proc_depth_points = depth_points
             losses.update(trans_losses)
 
+        rot_gt = None
+        if self.training:
+            rot_gt = Rotations.cat([p.gt_rotations for p in instances]).tensor
+        rot, proc_losses, nocs, raw_nocs = self._forward_proc(
+            shape_code,
+            proc_depth_points,
+            mask_pred,
+            trans_pred,
+            scale_pred,
+            alignment_classes,
+            mask_probs=mask_probs,
+            gt_depth_points=gt_depth_points,
+            gt_masks=mask_gt,
+            gt_trans=trans_gt,
+            gt_rot=rot_gt,
+            gt_scale=scale_gt,
+            class_weights=class_weights
+        )
+        if self.training:
+            losses.update(proc_losses)
+        predictions['pred_rotations'] = rot
 
+        if raw_nocs is not None:
+            raw_nocs *= (mask_probs > 0.5)  # Keep all foreground NOCs!
 
+        # Do the retrieval
+        has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
+        predictions['has_alignment'] = has_alignment
+
+        retrieval_losses = self._forward_retrieval_train(
+            instances,
+            mask_pred,
+            nocs,
+            shape_code
+        )
+        losses.update(retrieval_losses)
         return True
 
     def forward_training(self, instances, depth_features, depths,
@@ -278,7 +314,7 @@ class AlignmentHead(nn.Module):
 
         # Rotation
         rot_gt = Rotations.cat([p.gt_rotations for p in instances])
-        proc_losses, _, nocs = self._forward_proc(
+        _, proc_losses, nocs, _ = self._forward_proc(
             shape_code,
             depth_points_pred,
             mask_pred,
@@ -379,7 +415,8 @@ class AlignmentHead(nn.Module):
         )
         predictions['pred_translations'] = pred_transes
 
-        pred_rots, _, pred_nocs = self._forward_proc(
+        # FIXME: why use raw_nocs as pred_nocs?
+        pred_rots, _, _, pred_nocs = self._forward_proc(
             shape_code,
             raw_depth_points,
             pred_masks,
@@ -650,6 +687,8 @@ class AlignmentHead(nn.Module):
         gt_scale=None,
         class_weights=None
     ):
+        losses = {}
+
         # Untranslate depth using trans
         # depth_points = inverse_transform(depth_points, masks, trans=trans)
         depth_points = inverse_transform(depth_points, trans=trans)
@@ -668,6 +707,7 @@ class AlignmentHead(nn.Module):
         # Perform procrustes steps to sufficiently large regions
         has_enough = masks.flatten(1).sum(-1) >= self.min_nocs
         do_proc = has_enough.any()
+        rot, trs = None, None
         if do_proc:
             rot, trs = self._solve_proc(
                 nocs,
@@ -679,8 +719,6 @@ class AlignmentHead(nn.Module):
                 masks,
                 mask_probs
             )
-        else:  # not do_proc
-            rot, trs = None, None
 
         if self.training:
             assert gt_depth_points is not None
@@ -688,8 +726,6 @@ class AlignmentHead(nn.Module):
             assert gt_trans is not None
             assert gt_rot is not None
             assert gt_scale is not None
-
-            losses = {}
 
             gt_rot = Rotations(gt_rot).as_rotation_matrices()
             gt_nocs = inverse_transform(
@@ -722,9 +758,7 @@ class AlignmentHead(nn.Module):
                     weights=class_weights
                 )
 
-            return losses, rot, nocs
-        else:
-            # Make the standard Procrustes inference
+        if not self.training:
             if do_proc:
                 trans[has_enough] += trs
                 rot = Rotations.from_rotation_matrices(rot).tensor
@@ -734,7 +768,7 @@ class AlignmentHead(nn.Module):
                 batch_size = has_enough.numel()
                 rot = Rotations.new_empty(batch_size, device=device).tensor
 
-            return rot, nocs, raw_nocs
+        return rot, losses, nocs, raw_nocs
 
     def _encode_shape_grid(self, shape_code, depth_points, scale, classes):
         #  if self.use_noc_embedding:
