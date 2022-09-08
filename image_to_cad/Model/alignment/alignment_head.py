@@ -300,7 +300,7 @@ class AlignmentHead(nn.Module):
         losses.update(scale_losses)
 
         # Translation
-        trans_losses, trans_pred, trans_gt = self._forward_trans(
+        trans_pred, trans_losses, trans_gt = self._forward_trans(
             shape_code,
             depth_pred,
             depth_points_pred,
@@ -407,7 +407,7 @@ class AlignmentHead(nn.Module):
             xy_grid_n,
             alignment_sizes
         )
-        pred_transes = self._forward_trans(
+        pred_transes, _, _ = self._forward_trans(
             shape_code,
             depths,
             depth_points,
@@ -542,6 +542,7 @@ class AlignmentHead(nn.Module):
         )
 
 
+        gt_depth_points = None
         if self.training:
             assert gt_masks is not None
             assert gt_depths is not None
@@ -572,8 +573,6 @@ class AlignmentHead(nn.Module):
         depths *= pred_masks
         depth_points *= pred_masks
 
-        gt_depths = None
-        gt_depth_points = None
         if self.training:
             gt_depths = gt_depths * gt_masks
             gt_depth_points = gt_depth_points * gt_masks
@@ -840,9 +839,49 @@ class AlignmentHead(nn.Module):
         mask_probs = new_probs
         return mask_probs
 
+    def forward_retrieval(
+        self,
+        instances, mask, nocs, shape_code,
+        predictions,
+        extra_outputs,
+        scenes,
+        has_alignment,
+        instance_sizes,
+        pred_scales,
+        pred_transes,
+        pred_rots,
+        depth_points,
+        pred_nocs,
+        pred_masks,
+        pred_classes,
+        shape_code_
+    ):
+        losses = {}
+
+        if self.training:
+            if not self.retrieval_head.baseline:
+                pos_cads = L.cat([p.gt_pos_cads for p in instances])
+                neg_cads = L.cat([p.gt_neg_cads for p in instances])
+
+                # TODO: make this configurable
+                sample = torch.randperm(pos_cads.size(0))[:32]
+
+                retrieval_losses = self.retrieval_head(
+                    masks=mask[sample],
+                    noc_points=nocs[sample],
+                    shape_code=shape_code[sample],
+                    pos_cads=pos_cads[sample],
+                    neg_cads=neg_cads[sample]
+                )
+                losses.update(retrieval_losses)
+
+        return
+
     def _forward_retrieval_train(self, instances, mask, nocs, shape_code):
         losses = {}
 
+        print(self.retrieval_head.baseline)
+        exit()
         if not self.retrieval_head.baseline:
             pos_cads = L.cat([p.gt_pos_cads for p in instances])
             neg_cads = L.cat([p.gt_neg_cads for p in instances])
