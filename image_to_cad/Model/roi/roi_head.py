@@ -167,13 +167,9 @@ class ROCAROIHeads(StandardROIHeads):
 
         losses.update(self.alignment_head(
             instances, depth_features, depths,
-            image_size, mask_probs, mask_pred,
-            gt_depths=gt_depths,
-            gt_classes=gt_classes,
-            class_weights=class_weights,
-            xy_grid=xy_grid,
-            xy_grid_n=xy_grid_n,
-            mask_gt=mask_gt
+            gt_depths, image_size, gt_classes,
+            class_weights, xy_grid, xy_grid_n,
+            mask_pred, mask_probs, mask_gt
         ))
         return losses
 
