@@ -26,10 +26,6 @@ class RetrievalHead(nn.Module):
         self.wild_points_by_class = None
         self.wild_ids_by_class = None
 
-        self.baseline = cfg.MODEL.RETRIEVAL_BASELINE
-        if self.baseline:
-            return
-
         self.loss = nn.TripletMarginLoss(margin=margin)
 
         if '_' in self.mode:
@@ -125,15 +121,23 @@ class RetrievalHead(nn.Module):
             self.has_cads = False
         return
 
-    def forward(self, classes= None, masks= None, noc_points= None,
-                shape_code= None, instance_sizes= None,
-                has_alignment= None, scenes= None,
-                wild_retrieval= False, pos_cads= None, neg_cads= None):
-        if self.training:
-            losses = {}
-            if self.baseline:
-                return losses
+    def forward(
+        self,
+        classes=None,
+        masks=None,
+        noc_points=None,
+        shape_code= None,
+        instance_sizes=None,
+        has_alignment=None,
+        scenes=None,
+        wild_retrieval=False,
+        pos_cads=None,
+        neg_cads=None
+    ):
+        losses = {}
+        cad_ids, pred_indices = None, None
 
+        if self.training:
             assert pos_cads is not None
             assert neg_cads is not None
 
@@ -151,38 +155,29 @@ class RetrievalHead(nn.Module):
             cad_embeds = self.embed_cads(torch.cat([pos_cads, neg_cads]))
             pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
             losses['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
-            return losses
-
-        # Lookup for CAD ids at inference
-        if wild_retrieval:
-            assert self.has_wild_cads, 'No registered wild CAD models'
         else:
-            assert self.has_cads, 'No registered CAD models!'
+            # Lookup for CAD ids at inference
+            if wild_retrieval:
+                assert self.has_wild_cads, 'No registered wild CAD models'
+            else:
+                assert self.has_cads, 'No registered CAD models!'
 
-        scenes = list(chain(*(
-            [scene] * isize
-            for scene, isize in zip(scenes, instance_sizes)
-        )))
+            scenes = list(chain(*(
+                [scene] * isize
+                for scene, isize in zip(scenes, instance_sizes)
+            )))
 
-        if self.baseline:
-            return self._perform_baseline(
+            cad_ids, pred_indices = self._embedding_lookup(
                 has_alignment,
                 classes,
                 masks,
                 scenes,
                 noc_points,
-                wild_retrieval=wild_retrieval
+                wild_retrieval=wild_retrieval,
+                shape_code=shape_code
             )
 
-        return self._embedding_lookup(
-            has_alignment,
-            classes,
-            masks,
-            scenes,
-            noc_points,
-            wild_retrieval=wild_retrieval,
-            shape_code=shape_code
-        )
+        return cad_ids, pred_indices, losses
 
     def embed_nocs(self, shape_code= None, noc_points= None, mask= None):
         # Assertions
@@ -227,9 +222,7 @@ class RetrievalHead(nn.Module):
                              .format(self.noc_mode))
 
     def embed_cads(self, cad_points):
-        if self.baseline:
-            return cad_points
-        elif self.is_voxel:
+        if self.is_voxel:
             return self.cad_net(cad_points.float())
         else:  # Point clouds
             return self.cad_net(cad_points.transpose(-2, -1))
