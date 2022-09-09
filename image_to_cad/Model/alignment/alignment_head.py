@@ -86,7 +86,6 @@ class AlignmentHead(nn.Module):
 
         # Initialize the retrieval head
         self.retrieval_head = RetrievalHead(cfg, shape_code_size)
-        self.wild_retrieval = cfg.MODEL.WILD_RETRIEVAL_ON
         return
 
     @property
@@ -122,6 +121,7 @@ class AlignmentHead(nn.Module):
     ):
         losses = {}
         predictions = {}
+        extra_outputs = {}
 
         instance_sizes = [len(x) for x in instances]
 
@@ -188,8 +188,8 @@ class AlignmentHead(nn.Module):
         scale_pred, scale_losses, scale_gt = self._forward_scale(
             shape_code,
             alignment_classes,
-            instances=forward_instances,
-            class_weights=class_weights
+            forward_instances,
+            class_weights
         )
         predictions['pred_scales'] = scale_pred
 
@@ -242,13 +242,26 @@ class AlignmentHead(nn.Module):
         has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
         predictions['has_alignment'] = has_alignment
 
-        retrieval_losses = self._forward_retrieval_train(
-            instances,
+        predictions, retrieval_losses, extra_outputs = self.forward_retrieval(
+            alignment_classes,
             mask_pred,
             nocs,
-            shape_code
+            shape_code,
+            instance_sizes,
+            has_alignment,
+            scenes,
+            forward_instances,
+            predictions,
+            extra_outputs,
+            scale_pred,
+            trans_pred,
+            rot,
+            depth_points,
+            raw_nocs,
+            mask_pred
         )
-        losses.update(retrieval_losses)
+        if self.training:
+            losses.update(retrieval_losses)
         return True
 
     def forward_training(self, instances, depth_features, depths,
@@ -287,7 +300,6 @@ class AlignmentHead(nn.Module):
                 gt_depths=gt_depths,
                 class_weights=class_weights
             )
-
         losses.update(depth_losses)
 
         # Scale
@@ -310,7 +322,7 @@ class AlignmentHead(nn.Module):
             gt_depths=depth_gt,
             class_weights=class_weights
         )
-        losses.update(trans_losses)
+        #  losses.update(trans_losses)
 
         # Rotation
         rot_gt = Rotations.cat([p.gt_rotations for p in instances])
@@ -329,15 +341,34 @@ class AlignmentHead(nn.Module):
             gt_scale=scale_gt,
             class_weights=class_weights
         )
-        losses.update(proc_losses)
+        #  losses.update(proc_losses)
 
-        # Retrieval
-        losses.update(self._forward_retrieval_train(
-            instances,
+        alignment_classes = None
+        has_alignment = None
+        scenes = None
+        predictions = {}
+        extra_outputs = {}
+        rot = None
+        depth_points = None
+        _, retrieval_losses, _ = self.forward_retrieval(
+            alignment_classes,
             mask_pred,
             nocs,
-            shape_code
-        ))
+            shape_code,
+            instance_sizes,
+            has_alignment,
+            scenes,
+            instances,
+            predictions,
+            extra_outputs,
+            scale_pred,
+            trans_pred,
+            rot,
+            depth_points,
+            nocs,
+            mask_pred
+        )
+        #  losses.update(retrieval_losses)
 
         return losses
 
@@ -352,13 +383,13 @@ class AlignmentHead(nn.Module):
         inference_args,
         scenes
     ):
+        predictions = {}
+        extra_outputs = {}
 
         instance_sizes = [len(x) for x in instances]
         num_instances = sum(instance_sizes)
         if num_instances == 0:
             return self.identity()
-
-        predictions = {}
 
         pred_classes = [x.pred_classes for x in instances]
         pred_boxes = [x.pred_boxes for x in instances]
@@ -434,20 +465,24 @@ class AlignmentHead(nn.Module):
         has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
         predictions['has_alignment'] = has_alignment
 
-        predictions, extra_outputs = self._forward_retrieval_inference(
-            predictions=predictions,
-            extra_outputs={},
-            scenes=scenes,
-            has_alignment=has_alignment,
-            instance_sizes=instance_sizes,
-            pred_scales=pred_scales,
-            pred_transes=pred_transes,
-            pred_rots=pred_rots,
-            depth_points=depth_points,
-            pred_nocs=pred_nocs,
-            pred_masks=pred_masks,
-            pred_classes=pred_classes,
-            shape_code=shape_code
+        masks = None
+        nocs = None
+        predictions, _, extra_outputs = self.forward_retrieval(
+            pred_classes,
+            masks,
+            nocs,
+            shape_code,
+            instance_sizes,
+            has_alignment,
+            scenes,
+            predictions,
+            extra_outputs,
+            pred_scales,
+            pred_transes,
+            pred_rots,
+            depth_points,
+            pred_nocs,
+            pred_masks
         )
 
         return predictions, extra_outputs
@@ -841,32 +876,40 @@ class AlignmentHead(nn.Module):
 
     def forward_retrieval(
         self,
-        instances=None, mask=None, nocs=None, shape_code=None,
+        pred_classes=None,
+        masks=None,
+        nocs=None,
+        shape_code=None,
+        instance_sizes=None,
+        has_alignment=None,
+        scenes=None,
+        instances=None, 
         predictions=None,
         extra_outputs=None,
-        scenes=None,
-        has_alignment=None,
-        instance_sizes=None,
         pred_scales=None,
         pred_transes=None,
         pred_rots=None,
         depth_points=None,
         pred_nocs=None,
         pred_masks=None,
-        pred_classes=None
     ):
         losses = {}
 
-        masks = None
         noc_points = None
+        wild_retrieval = False
+        pos_cads = None
+        neg_cads = None
         if self.training:
             pos_cads = L.cat([p.gt_pos_cads for p in instances])
             neg_cads = L.cat([p.gt_neg_cads for p in instances])
             # TODO: make this configurable
             sample = torch.randperm(pos_cads.size(0))[:32]
-            masks = mask[sample]
+            masks = masks[sample]
             noc_points = nocs[sample]
             shape_code = shape_code[sample]
+            has_alignment = None
+            pos_cads = pos_cads[sample]
+            neg_cads = neg_cads[sample]
         else:
             if self.has_cads:
                 assert scenes is not None
@@ -884,20 +927,23 @@ class AlignmentHead(nn.Module):
                     pred_transes
                 )
 
-        cad_ids, pred_indices, retrieval_losses = self.retrieval_head(
-            pred_classes,
-            masks,
-            noc_points,
-            shape_code,
-            instance_sizes,
-            has_alignment,
-            scenes,
-            pos_cads=pos_cads[sample],
-            neg_cads=neg_cads[sample]
-        )
-        losses.update(retrieval_losses)
+        cad_ids, pred_indices, retrieval_losses = None, None, None
+        if self.training:
+            cad_ids, pred_indices, retrieval_losses = self.retrieval_head(
+                pred_classes,
+                masks,
+                noc_points,
+                shape_code,
+                instance_sizes,
+                has_alignment,
+                scenes,
+                wild_retrieval,
+                pos_cads,
+                neg_cads
+            )
 
-        if self.has_cads:
+            losses.update(retrieval_losses)
+        elif self.has_cads:
             assert scenes is not None
 
             if pred_nocs is not None:
@@ -914,30 +960,20 @@ class AlignmentHead(nn.Module):
                     pred_transes
                 )
 
-            cad_ids, pred_indices = self.retrieval_head(
-                scenes=scenes,
-                instance_sizes=instance_sizes,
-                has_alignment=has_alignment,
-                classes=pred_classes,
-                masks=pred_masks,
-                noc_points=noc_points,
-                shape_code=shape_code_inference
+            cad_ids, pred_indices, _ = self.retrieval_head(
+                pred_classes,
+                masks,
+                noc_points,
+                shape_code,
+                instance_sizes,
+                has_alignment,
+                scenes,
+                wild_retrieval,
+                pos_cads,
+                neg_cads
             )
             extra_outputs['cad_ids'] = cad_ids
             predictions['pred_indices'] = pred_indices
-
-        if self.wild_retrieval:
-            wild_cad_ids, wild_pred_indices = self.retrieval_head(
-                scenes=scenes,
-                instance_sizes=instance_sizes,
-                classes=pred_classes,
-                masks=pred_masks,
-                noc_points=noc_points,
-                wild_retrieval=self.wild_retrieval,
-                shape_code=shape_code_inference
-            )
-            extra_outputs['wild_cad_ids'] = wild_cad_ids
-            predictions['pred_wild_indices'] = wild_pred_indices
 
         return predictions, losses, extra_outputs
 
@@ -1004,19 +1040,6 @@ class AlignmentHead(nn.Module):
             )
             extra_outputs['cad_ids'] = cad_ids
             predictions['pred_indices'] = pred_indices
-
-        if self.wild_retrieval:
-            wild_cad_ids, wild_pred_indices = self.retrieval_head(
-                scenes=scenes,
-                instance_sizes=instance_sizes,
-                classes=pred_classes,
-                masks=pred_masks,
-                noc_points=noc_points,
-                wild_retrieval=self.wild_retrieval,
-                shape_code=shape_code
-            )
-            extra_outputs['wild_cad_ids'] = wild_cad_ids
-            predictions['pred_wild_indices'] = wild_pred_indices
 
         return predictions, extra_outputs
 
