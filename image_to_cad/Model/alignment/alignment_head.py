@@ -368,7 +368,7 @@ class AlignmentHead(nn.Module):
             nocs,
             mask_pred
         )
-        #  losses.update(retrieval_losses)
+        losses.update(retrieval_losses)
 
         return losses
 
