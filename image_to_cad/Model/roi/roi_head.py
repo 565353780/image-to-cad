@@ -165,12 +165,17 @@ class ROCAROIHeads(StandardROIHeads):
         )
         losses.update(mask_losses)
 
-        losses.update(self.alignment_head(
+        inference_args = None
+        scenes = None
+        predictions, alignment_losses, extra_outputs = self.alignment_head.forward_new(
             instances, depth_features, depths,
-            gt_depths, image_size, gt_classes,
-            class_weights, xy_grid, xy_grid_n,
-            mask_pred, mask_probs, mask_gt
-        ))
+            image_size, mask_probs, mask_pred,
+            inference_args, scenes, gt_depths,
+            gt_classes, class_weights, xy_grid,
+            xy_grid_n, mask_gt
+        )
+
+        losses.update(alignment_losses)
         return losses
 
     def _forward_alignment_inference(self, features, instances, image_size,
@@ -191,12 +196,35 @@ class ROCAROIHeads(StandardROIHeads):
         )
 
         # Predict alignments
-        predictions, extra_outputs = self.alignment_head(
+        old_predictions, old_extra_outputs = self.alignment_head(
             instances, depth_features, depths,
             image_size, pred_mask_probs, pred_masks,
             inference_args=inference_args,
             scenes=scenes
         )
+
+        gt_depths = None
+        gt_classes = None
+        class_weights = None
+        xy_grid = None
+        xy_grid_n = None
+        mask_gt = None
+        predictions, alignment_losses, extra_outputs = self.alignment_head.forward_new(
+            instances, depth_features, depths,
+            image_size, pred_mask_probs, pred_masks,
+            inference_args, scenes, gt_depths,
+            gt_classes, class_weights, xy_grid,
+            xy_grid_n, mask_gt
+        )
+
+        print("=========================")
+        print(old_predictions)
+        print(predictions)
+        print("=========================")
+        print(old_extra_outputs)
+        print(extra_outputs)
+        exit()
+
         predictions['pred_masks'] = pred_mask_probs
 
         # Fill the instances

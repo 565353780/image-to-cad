@@ -179,7 +179,7 @@ class RetrievalHead(nn.Module):
 
         return cad_ids, pred_indices, losses
 
-    def embed_nocs(self, shape_code= None, noc_points= None, mask= None):
+    def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
         # Assertions
         if 'image' in self.noc_mode:
             assert shape_code is not None

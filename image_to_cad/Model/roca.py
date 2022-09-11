@@ -118,11 +118,7 @@ class ROCA(nn.Module):
     def set_train_cads(self, points, ids):
         retrieval_head = self.retrieval_head
 
-        retrieval_head.wild_points_by_class = (
-            {k: p.to(self.device) for k, p in points.items()}
-            if retrieval_head.baseline
-            else points
-        )
+        retrieval_head.wild_points_by_class = points
         retrieval_head.wild_ids_by_class = ids
 
         self.train_cads_embedded = False
@@ -141,7 +137,7 @@ class ROCA(nn.Module):
             points=points,
             ids=ids,
             scene_data=scene_data,
-            device=self.device if self.retrieval_head.baseline else 'cpu'
+            device='cpu' #FIXME: why use cpu?
         )
         self.val_cads_embedded = False
 
@@ -155,9 +151,6 @@ class ROCA(nn.Module):
     @torch.no_grad()
     def _embed_cads(self, wild: bool = True, batch_size: int = 16):
         retrieval_head = self.retrieval_head
-        if retrieval_head.baseline:
-            return
-
         if wild:
             assert retrieval_head.has_wild_cads, \
                 'Call `set_train_cads` before embedding cads'
