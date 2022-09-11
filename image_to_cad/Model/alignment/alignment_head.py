@@ -322,7 +322,7 @@ class AlignmentHead(nn.Module):
             gt_depths=depth_gt,
             class_weights=class_weights
         )
-        #  losses.update(trans_losses)
+        losses.update(trans_losses)
 
         # Rotation
         rot_gt = Rotations.cat([p.gt_rotations for p in instances])
@@ -341,7 +341,7 @@ class AlignmentHead(nn.Module):
             gt_scale=scale_gt,
             class_weights=class_weights
         )
-        #  losses.update(proc_losses)
+        losses.update(proc_losses)
 
         alignment_classes = None
         has_alignment = None
@@ -605,8 +605,8 @@ class AlignmentHead(nn.Module):
             print(metric_dict)
 
         raw_depth_points = depth_points.clone()
-        depths *= pred_masks
-        depth_points *= pred_masks
+        depths = depths * pred_masks
+        depth_points = depth_points * pred_masks
 
         if self.training:
             gt_depths = gt_depths * gt_masks
