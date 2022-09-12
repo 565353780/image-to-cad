@@ -42,8 +42,6 @@ class DepthHead(nn.Module):
         return self.fpn_depth_features.out_channels
 
     def forward(self, features, depth_gt=None):
-        features = [features[f] for f in self.in_features]
-
         if self.training:
             assert depth_gt is not None
             mask = depth_gt > 1e-5
@@ -58,6 +56,8 @@ class DepthHead(nn.Module):
                 )
                 depth_pred = torch.zeros_like(depth_gt)
                 return depth_pred, depth_features
+
+        features = [features[f] for f in self.in_features]
 
         depth_features = self.fpn_depth_features(features)
         depth_pred = self.fpn_depth_output(depth_features)
