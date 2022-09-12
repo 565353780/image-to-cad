@@ -60,12 +60,15 @@ class ROCAROIHeads(StandardROIHeads):
                 targets=None, gt_depths=None, scenes=None):
         image_size = images[0].shape[-2:]  # Assume single image size!
 
+        losses = {}
+
         if self.training:
             assert targets
             assert gt_depths is not None
             proposals = self.label_and_sample_proposals(proposals, targets)
 
-            losses = self._forward_box(features, proposals)
+            box_losses = self._forward_box(features, proposals)
+            losses.update(box_losses)
 
             depths, depth_features = self.depth_head(features, gt_depths)
             depth_losses = self.depth_head.loss(depths, gt_depths)
@@ -104,6 +107,70 @@ class ROCAROIHeads(StandardROIHeads):
     def _forward_box(self, *args, **kwargs):
         self.box_predictor.set_class_weights(self.class_weights)
         return super()._forward_box(*args, **kwargs)
+
+    def forward_alignment(
+        self,
+        features,
+        instances,
+        image_size,
+        depths,
+        depth_features,
+        inference_args=None,
+        gt_depths=None,
+        scenes=None
+    ):
+        features = [features[f] for f in self.in_features]
+
+        losses = {}
+
+        if self.training:
+            # Declare some useful variables
+            instances, _ = select_foreground_proposals(
+                instances, self.num_classes
+            )
+
+            proposal_boxes = [x.proposal_boxes for x in instances]
+            if self.train_on_pred_boxes:
+                for pb in proposal_boxes:
+                    pb.clip(image_size)
+            features = self.mask_pooler(features, proposal_boxes)
+            boxes = Boxes.cat(proposal_boxes)
+            batch_size = features.size(0)
+            gt_classes = L.cat([p.gt_classes for p in instances])
+
+            # Get class weight for losses
+            class_weights = self.class_weights[gt_classes + 1]
+
+            # Create xy-grids for back-projection and cropping, respectively
+            xy_grid, xy_grid_n = create_xy_grids(
+                boxes,
+                image_size,
+                batch_size,
+                self.output_grid_size
+            )
+
+        # Mask
+        mask_probs, mask_pred, mask_losses, mask_gt = self.forward_mask(
+            features,
+            gt_classes,
+            instances,
+            xy_grid_n,
+            class_weights
+        )
+        losses.update(mask_losses)
+
+        inference_args = None
+        scenes = None
+        predictions, alignment_losses, extra_outputs = self.alignment_head(
+            instances, depth_features, depths,
+            image_size, mask_probs, mask_pred,
+            inference_args, scenes, gt_depths,
+            gt_classes, class_weights, xy_grid,
+            xy_grid_n, mask_gt
+        )
+
+        losses.update(alignment_losses)
+        return
 
     def _forward_alignment(self, features, instances, image_size,
                            depths,depth_features, inference_args=None,
@@ -157,12 +224,12 @@ class ROCAROIHeads(StandardROIHeads):
         )
 
         # Mask
-        mask_losses, mask_probs, mask_pred, mask_gt = self._forward_mask(
+        mask_probs, mask_pred, mask_losses, mask_gt = self.forward_mask(
             features,
             gt_classes,
             instances,
-            xy_grid_n=xy_grid_n,
-            class_weights=class_weights
+            xy_grid_n,
+            class_weights
         )
         losses.update(mask_losses)
 
@@ -192,7 +259,7 @@ class ROCAROIHeads(StandardROIHeads):
 
         # Predict the mask
         pred_classes = L.cat(pred_classes)
-        pred_mask_probs, pred_masks = self._forward_mask(
+        pred_mask_probs, pred_masks, _, _ = self.forward_mask(
             features, pred_classes
         )
 
@@ -219,42 +286,67 @@ class ROCAROIHeads(StandardROIHeads):
                 setattr(instance, name, pred)
         return instances, extra_outputs
 
-    def _forward_mask(self, features, classes, instances=None,
-                      xy_grid_n=None, class_weights=None):
+    def forward_mask(
+        self,
+        features,
+        classes,
+        instances=None,
+        xy_grid_n=None,
+        class_weights=None
+    ):
         mask_logits = self.mask_head.layers(features)
         mask_logits = select_classes(mask_logits, self.num_classes + 1, classes)
 
+        mask_probs = torch.sigmoid(mask_logits)
+
+        mask_pred = None
+        if self.training:
+            mask_pred = mask_probs > 0.5
+        else:
+            mask_pred = mask_probs > 0.7
+
+        mask_gt = None
         if self.training:
             assert instances is not None
             assert xy_grid_n is not None
-
-            losses = {}
-
-            mask_probs = torch.sigmoid(mask_logits)
-            mask_pred = mask_probs > 0.5
-
             mask_gt = Masks\
                 .cat([p.gt_masks for p in instances])\
                 .crop_and_resize_with_grid(xy_grid_n, self.output_grid_size)
 
-            losses['loss_mask'] = binary_cross_entropy_with_logits(
-                mask_logits, mask_gt, class_weights
-            )
-            losses['loss_mask_iou'] = mask_iou_loss(
-                mask_probs, mask_gt, class_weights
-            )
+        losses = self.mask_loss(
+            mask_logits,
+            mask_probs,
+            mask_pred,
+            mask_gt,
+            class_weights)
 
-            # Log the mask performance and then convert mask_pred to float
-            metric_dict = mask_metrics(mask_pred, mask_gt.bool())
-            print("[INFO][ROCAROIHeads::_forward_mask]")
-            print("\t mask_metrics")
-            print(metric_dict)
+        mask_pred = mask_pred.to(mask_probs.dtype)
 
-            mask_pred = mask_pred.to(mask_gt.dtype)
+        return mask_probs, mask_pred, losses, mask_gt
 
-            return losses, mask_probs, mask_pred, mask_gt
+    def mask_loss(
+        self,
+        mask_logits,
+        mask_probs,
+        mask_pred,
+        mask_gt=None,
+        class_weights=None
+    ):
+        losses = {}
 
-        mask_probs = torch.sigmoid_(mask_logits)
-        mask_pred = (mask_probs > 0.7).to(mask_probs.dtype)
-        return mask_probs, mask_pred
+        if mask_gt is None:
+            return losses
+
+        losses['loss_mask'] = binary_cross_entropy_with_logits(
+            mask_logits, mask_gt, class_weights
+        )
+        losses['loss_mask_iou'] = mask_iou_loss(
+            mask_probs, mask_gt, class_weights
+        )
+
+        # Log the mask performance and then convert mask_pred to float
+        #FIXME: log this loss
+        #  metric_dict = mask_metrics(mask_pred, mask_gt.bool())
+
+        return losses
 
