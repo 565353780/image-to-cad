@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from image_to_cad.Loss.loss_functions import \
-    cosine_distance, inverse_huber_loss, masked_l1_loss
+    cosine_distance, inverse_huber_loss
 
 from image_to_cad.Metric.logging_metrics import depth_metrics
 
@@ -33,26 +33,43 @@ class DepthHead(nn.Module):
         if cfg.MODEL.DEPTH_GRAD_LOSSES:
             self.sobel = Sobel()
 
-        # TODO: make this configurable
-        self.use_rhu = True
         self.use_grad_losses = cfg.MODEL.DEPTH_GRAD_LOSSES
         self.use_batch_average = cfg.MODEL.DEPTH_BATCH_AVERAGE
         return
 
     @property
-    def out_channels(self) -> int:
+    def out_channels(self):
         return self.fpn_depth_features.out_channels
 
     def forward(self, features, depth_gt=None):
         features = [features[f] for f in self.in_features]
 
-        if not self.training:
-            depth_features = self.fpn_depth_features(features)
-            depth_pred = self.fpn_depth_output(depth_features)
-            return depth_pred, depth_features
+        if self.training:
+            assert depth_gt is not None
+            mask = depth_gt > 1e-5
+            flt = mask.flatten(1).any(1)
 
+            if not flt.any():
+                depth_features = torch.zeros(
+                    depth_gt.size(0),
+                    self.fpn_depth_features.out_channels,
+                    *self.fpn_depth_features.size,
+                    device=depth_gt.device
+                )
+                depth_pred = torch.zeros_like(depth_gt)
+                return depth_pred, depth_features
+
+        depth_features = self.fpn_depth_features(features)
+        depth_pred = self.fpn_depth_output(depth_features)
+
+        return depth_pred, depth_features
+
+    def loss(self, depth, depth_gt=None):
         losses = {}
-        assert depth_gt is not None
+
+        if depth_gt is None:
+            return losses
+
         mask = depth_gt > 1e-5
         flt = mask.flatten(1).any(1)
 
@@ -65,46 +82,26 @@ class DepthHead(nn.Module):
                     'loss_grad_y': zero_loss.clone(),
                     'loss_normal': zero_loss.clone()
                 })
-            depth_features = torch.zeros(
-                depth_gt.size(0),
-                self.fpn_depth_features.out_channels,
-                *self.fpn_depth_features.size,
-                device=depth_gt.device
-            )
-            depth_pred = torch.zeros_like(depth_gt)
-            return losses, depth_pred, depth_features
-
-        depth_features = self.fpn_depth_features(features)
-        raw_depth_pred = self.fpn_depth_output(depth_features)
+            return losses
 
         mask = mask[flt]
-        depth_pred = raw_depth_pred[flt] * mask
+        depth_pred = depth[flt] * mask
         depth_gt = depth_gt[flt] * mask
 
-        loss_fn = inverse_huber_loss if self.use_rhu else masked_l1_loss
-
         # Directly compare the depths
-        losses['loss_image_depth'] = loss_fn(
+        losses['loss_image_depth'] = inverse_huber_loss(
             depth_pred, depth_gt,
             mask, mask_inputs=False,
             instance_average=self.use_batch_average)
-
-        # Log depth metrics to tensorboard
-        metric_dict = depth_metrics(
-            depth_pred, depth_gt,
-            mask, mask_inputs=False,
-            pref='depth/image_')
-        print("[INFO][DepthHead::forward]")
-        print(metric_dict)
 
         # Grad loss
         if self.use_grad_losses:
             gradx_pred, grady_pred = self.sobel(depth_pred).chunk(2, dim=1)
             gradx_gt, grady_gt = self.sobel(depth_gt).chunk(2, dim=1)
-            losses['loss_grad_x'] = loss_fn(
+            losses['loss_grad_x'] = inverse_huber_loss(
                 gradx_pred, gradx_gt,
                 mask, mask_inputs=False)
-            losses['loss_grad_y'] = loss_fn(
+            losses['loss_grad_y'] = inverse_huber_loss(
                 grady_pred, grady_gt,
                 mask, mask_inputs=False)
 
@@ -116,5 +113,10 @@ class DepthHead(nn.Module):
             losses['loss_normal'] = 5 * cosine_distance(
                 normal_pred, normal_gt, mask)
 
-        return losses, raw_depth_pred, depth_features
+        # Log depth metrics to tensorboard
+        #  metric_dict = depth_metrics(
+            #  depth_pred, depth_gt,
+            #  mask, mask_inputs=False,
+            #  pref='depth/image_')
+        return losses
 
