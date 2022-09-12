@@ -42,6 +42,8 @@ class DepthHead(nn.Module):
         return self.fpn_depth_features.out_channels
 
     def forward(self, features, depth_gt=None):
+        losses = {}
+
         if self.training:
             assert depth_gt is not None
             mask = depth_gt > 1e-5
@@ -62,7 +64,10 @@ class DepthHead(nn.Module):
         depth_features = self.fpn_depth_features(features)
         depth_pred = self.fpn_depth_output(depth_features)
 
-        return depth_pred, depth_features
+        if self.training:
+            losses = self.loss(depth_pred, depth_gt)
+
+        return depth_pred, depth_features, losses
 
     def loss(self, depth, depth_gt=None):
         losses = {}
