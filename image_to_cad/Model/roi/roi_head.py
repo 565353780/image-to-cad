@@ -56,61 +56,62 @@ class ROCAROIHeads(StandardROIHeads):
         self.verbose = verbose
         return
 
-    def forward(self, images, features, proposals,
-                targets=None, gt_depths=None, scenes=None):
+    def forward(
+        self,
+        images,
+        features,
+        proposals,
+        targets=None,
+        gt_depths=None,
+        scenes=None
+    ):
         image_size = images[0].shape[-2:]  # Assume single image size!
 
         losses = {}
 
+        inference_args = None
         if self.training:
             assert targets
             assert gt_depths is not None
             proposals = self.label_and_sample_proposals(proposals, targets)
+        else:
+            inference_args = targets
+            pred_instances = self.forward_box(features, proposals)
+            proposals = pred_instances
 
-            box_losses = self.forward_box(features, proposals)
-            losses.update(box_losses)
+        pred_instances, box_losses = self.forward_box(features, proposals)
+        losses.update(box_losses)
 
-            depths, depth_features = self.depth_head(features, gt_depths)
-            depth_losses = self.depth_head.loss(depths, gt_depths)
-            losses.update(depth_losses)
+        depths, depth_features, depth_losses = self.depth_head(features, gt_depths)
+        losses.update(depth_losses)
 
-            _, _, alignment_losses = self.forward_alignment(
-                features,
-                proposals,
-                image_size,
-                depths,
-                depth_features,
-                None,
-                gt_depths,
-                None
-            )
-            losses.update(alignment_losses)
-            return proposals, losses
+        extra_outputs = {'pred_image_depths': depths}
 
-        inference_args = targets  # Extra arguments for inference
-
-        pred_instances = self.forward_box(features, proposals)
-
-        pred_depths, depth_features = self.depth_head(features)
-        extra_outputs = {'pred_image_depths': pred_depths}
-
-        pred_instances, alignment_outputs, _ = self.forward_alignment(
+        pred_instances, alignment_outputs, alignment_losses = self.forward_alignment(
             features,
-            pred_instances,
+            proposals,
             image_size,
-            pred_depths,
+            depths,
             depth_features,
             inference_args,
-            None,
+            gt_depths,
             scenes
         )
+        losses.update(alignment_losses)
+
         extra_outputs.update(alignment_outputs)
 
-        return pred_instances, extra_outputs
+        return pred_instances, extra_outputs, proposals, losses
 
     def forward_box(self, *args, **kwargs):
         self.box_predictor.set_class_weights(self.class_weights)
-        return self._forward_box(*args, **kwargs)
+        losses = {}
+        pred_instances = None
+        if self.training:
+            losses = self._forward_box(*args, **kwargs)
+        else:
+            pred_instances = self._forward_box(*args, **kwargs)
+        return pred_instances, losses
 
     def forward_alignment(
         self,
