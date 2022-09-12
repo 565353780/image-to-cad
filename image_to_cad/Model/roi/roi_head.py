@@ -67,7 +67,8 @@ class ROCAROIHeads(StandardROIHeads):
 
             losses = self._forward_box(features, proposals)
 
-            depth_losses, depths, depth_features = self.depth_head(features, gt_depths)
+            depths, depth_features = self.depth_head(features, gt_depths)
+            depth_losses = self.depth_head.loss(depths, gt_depths)
             losses.update(depth_losses)
 
             losses.update(self._forward_alignment(
@@ -84,7 +85,7 @@ class ROCAROIHeads(StandardROIHeads):
 
         pred_instances = self._forward_box(features, proposals)
 
-        pred_depths, depth_features = self.depth_head(features, None)
+        pred_depths, depth_features = self.depth_head(features)
         extra_outputs = {'pred_image_depths': pred_depths}
 
         pred_instances, alignment_outputs = self._forward_alignment(
