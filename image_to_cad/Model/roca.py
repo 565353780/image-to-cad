@@ -76,8 +76,8 @@ class ROCA(nn.Module):
                 image_depths.append(input.pop('image_depth'))
             image_depths = torch.cat(image_depths, dim=0).to(self.device)
 
-            _, detector_losses = self.roi_heads(
-                images, features, proposals, gt_instances, image_depths
+            _, _, _, detector_losses = self.roi_heads(
+                images, features, proposals, gt_instances, image_depths, None
             )
 
             losses = {}
@@ -90,9 +90,8 @@ class ROCA(nn.Module):
             for input in batched_inputs]
         scenes = [input['scene'] for input in batched_inputs]
 
-        results, extra_outputs = self.roi_heads(
-            images, features, proposals,
-            targets=targets, scenes=scenes)
+        results, extra_outputs, _, _ = self.roi_heads(
+            images, features, proposals, targets, None, scenes)
 
         results = self.postprocess(
             results, batched_inputs, images.image_sizes)
