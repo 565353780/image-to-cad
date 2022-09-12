@@ -67,7 +67,7 @@ class ROCAROIHeads(StandardROIHeads):
             assert gt_depths is not None
             proposals = self.label_and_sample_proposals(proposals, targets)
 
-            box_losses = self._forward_box(features, proposals)
+            box_losses = self.forward_box(features, proposals)
             losses.update(box_losses)
 
             depths, depth_features = self.depth_head(features, gt_depths)
@@ -89,7 +89,7 @@ class ROCAROIHeads(StandardROIHeads):
 
         inference_args = targets  # Extra arguments for inference
 
-        pred_instances = self._forward_box(features, proposals)
+        pred_instances = self.forward_box(features, proposals)
 
         pred_depths, depth_features = self.depth_head(features)
         extra_outputs = {'pred_image_depths': pred_depths}
@@ -108,9 +108,9 @@ class ROCAROIHeads(StandardROIHeads):
 
         return pred_instances, extra_outputs
 
-    def _forward_box(self, *args, **kwargs):
+    def forward_box(self, *args, **kwargs):
         self.box_predictor.set_class_weights(self.class_weights)
-        return super()._forward_box(*args, **kwargs)
+        return self._forward_box(*args, **kwargs)
 
     def forward_alignment(
         self,
