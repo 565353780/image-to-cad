@@ -76,10 +76,10 @@ class ROCAROIHeads(StandardROIHeads):
             proposals = self.label_and_sample_proposals(proposals, targets)
         else:
             inference_args = targets
-            pred_instances = self.forward_box(features, proposals)
-            proposals = pred_instances
 
         pred_instances, box_losses = self.forward_box(features, proposals)
+        if not self.training:
+            proposals = pred_instances
         losses.update(box_losses)
 
         depths, depth_features, depth_losses = self.depth_head(features, gt_depths)
