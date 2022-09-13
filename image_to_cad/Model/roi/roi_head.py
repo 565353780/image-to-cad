@@ -61,35 +61,45 @@ class ROCAROIHeads(StandardROIHeads):
         images,
         features,
         proposals,
-        targets=None,
+        targets,
         gt_depths=None,
         scenes=None
     ):
-        image_size = images[0].shape[-2:]  # Assume single image size!
-
-        losses = {}
-
-        inference_args = None
+        '''
+        train:
+            gt_depths
+        infer:
+            scenes
+        '''
         if self.training:
             assert targets
             assert gt_depths is not None
+
+        losses = {}
+        extra_outputs = {}
+
+        image_size = images[0].shape[-2:]  # Assume single image size!
+
+        alignment_instances = None
+        inference_args = None
+        if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
+            alignment_instances = proposals
         else:
             inference_args = targets
 
         pred_instances, box_losses = self.forward_box(features, proposals)
         if not self.training:
-            proposals = pred_instances
+            alignment_instances = pred_instances
         losses.update(box_losses)
 
         depths, depth_features, depth_losses = self.depth_head(features, gt_depths)
         losses.update(depth_losses)
-
-        extra_outputs = {'pred_image_depths': depths}
+        extra_outputs['pred_image_depths'] = depths
 
         pred_instances, alignment_outputs, alignment_losses = self.forward_alignment(
             features,
-            proposals,
+            alignment_instances,
             image_size,
             depths,
             depth_features,
@@ -103,14 +113,14 @@ class ROCAROIHeads(StandardROIHeads):
 
         return pred_instances, extra_outputs, proposals, losses
 
-    def forward_box(self, *args, **kwargs):
+    def forward_box(self, features, proposals):
         self.box_predictor.set_class_weights(self.class_weights)
         losses = {}
         pred_instances = None
         if self.training:
-            losses = self._forward_box(*args, **kwargs)
+            losses = self._forward_box(features, proposals)
         else:
-            pred_instances = self._forward_box(*args, **kwargs)
+            pred_instances = self._forward_box(features, proposals)
         return pred_instances, losses
 
     def forward_alignment(
@@ -124,12 +134,11 @@ class ROCAROIHeads(StandardROIHeads):
         gt_depths=None,
         scenes=None
     ):
-        features = [features[f] for f in self.in_features]
-
         losses = {}
 
+        features = [features[f] for f in self.in_features]
+
         if self.training:
-            # Declare some useful variables
             instances, _ = select_foreground_proposals(
                 instances, self.num_classes
             )
@@ -144,9 +153,6 @@ class ROCAROIHeads(StandardROIHeads):
         gt_classes = None
         if self.training:
             proposal_boxes = [x.proposal_boxes for x in instances]
-            if self.train_on_pred_boxes:
-                for pb in proposal_boxes:
-                    pb.clip(image_size)
             features = self.mask_pooler(features, proposal_boxes)
             boxes = Boxes.cat(proposal_boxes)
             batch_size = features.size(0)
