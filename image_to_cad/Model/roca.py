@@ -59,56 +59,67 @@ class ROCA(nn.Module):
         return processed_results
 
     def forward(self, batched_inputs):
+        losses = {}
+
         images = self.preprocess_image(batched_inputs)
         features = self.backbone(images.tensor)
 
         gt_instances = None
-        if 'instances' in batched_inputs[0] and self.training:
+        if self.training:
             gt_instances = [
                 x['instances'].to(self.device) for x in batched_inputs]
 
         proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
 
+        targets = gt_instances
+        if not self.training:
+            targets = [
+                {'intrinsics': input['intrinsics'].to(self.device)}
+                for input in batched_inputs]
+
+        image_depths = None
         if self.training:
-            # Extract the image depth
             image_depths = []
             for input in batched_inputs:
                 image_depths.append(input.pop('image_depth'))
             image_depths = torch.cat(image_depths, dim=0).to(self.device)
 
-            _, _, _, detector_losses = self.roi_heads(
-                images, features, proposals, gt_instances, image_depths, None
+        scenes = None
+        if not self.training:
+            scenes = [input['scene'] for input in batched_inputs]
+
+        results, extra_outputs, _, detector_losses = self.roi_heads(
+            images,
+            features,
+            proposals,
+            targets,
+            image_depths,
+            scenes
+        )
+
+        losses.update(detector_losses)
+        losses.update(proposal_losses)
+
+        if not self.training:
+            results = self.postprocess(
+                results,
+                batched_inputs,
+                images.image_sizes
             )
 
-            losses = {}
-            losses.update(detector_losses)
-            losses.update(proposal_losses)
-            return losses
+            # Attach image depths
+            if 'pred_image_depths' in extra_outputs:
+                pred_image_depths = extra_outputs['pred_image_depths'].unbind(0)
+                for depth, result in zip(pred_image_depths, results):
+                    result['pred_image_depth'] = depth
 
-        targets = [
-            {'intrinsics': input['intrinsics'].to(self.device)}
-            for input in batched_inputs]
-        scenes = [input['scene'] for input in batched_inputs]
-
-        results, extra_outputs, _, _ = self.roi_heads(
-            images, features, proposals, targets, None, scenes)
-
-        results = self.postprocess(
-            results, batched_inputs, images.image_sizes)
-
-        # Attach image depths
-        if 'pred_image_depths' in extra_outputs:
-            pred_image_depths = extra_outputs['pred_image_depths'].unbind(0)
-            for depth, result in zip(pred_image_depths, results):
-                result['pred_image_depth'] = depth
-
-        # Attach CAD ids
-        for cad_ids in ('cad_ids', 'wild_cad_ids'):
-            if cad_ids in extra_outputs:
-                # indices are global, so all instances should have all CAD ids
-                for result in results:
-                    result[cad_ids] = extra_outputs[cad_ids]
-        return results
+            # Attach CAD ids
+            for cad_ids in ('cad_ids', 'wild_cad_ids'):
+                if cad_ids in extra_outputs:
+                    # indices are global, so all instances should have all CAD ids
+                    for result in results:
+                        result[cad_ids] = extra_outputs[cad_ids]
+        return results, losses
 
     @property
     def retrieval_head(self):
