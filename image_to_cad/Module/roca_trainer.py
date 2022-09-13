@@ -219,7 +219,7 @@ class ROCATrainer(object):
         data = next(self._data_loader_iter)
 
         with EventStorage(self.iter) as self.storage:
-            loss_dict = self.model(data)
+            _, loss_dict = self.model(data)
 
         for key, item in loss_dict.items():
             self.writer.add_scalar("train/" + key, item, self.iter)
@@ -239,7 +239,7 @@ class ROCATrainer(object):
             if self.do_val_step:
                 data = next(self._sample_val_iter)
                 with EventStorage(self.iter) as self.storage:
-                    val_loss_dict = self.model(data)
+                    _, val_loss_dict = self.model(data)
                 val_loss_dict['total_loss'] = sum(val_loss_dict.values())
 
                 for key, item in val_loss_dict.items():
