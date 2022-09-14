@@ -65,12 +65,6 @@ class ROCAROIHeads(StandardROIHeads):
         gt_depths=None,
         scenes=None
     ):
-        '''
-        train:
-            gt_depths
-        infer:
-            scenes
-        '''
         if self.training:
             assert targets
             assert gt_depths is not None
