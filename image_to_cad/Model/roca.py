@@ -120,7 +120,7 @@ class ROCA(nn.Module):
         return results, losses
 
     def set_train_cads(self, points, ids):
-        retrieval_head = self.roi_heads.alignment_head.retrieval_head
+        retrieval_head = self.roi_heads.retrieval_head
 
         retrieval_head.wild_points_by_class = points
         retrieval_head.wild_ids_by_class = ids
@@ -128,7 +128,7 @@ class ROCA(nn.Module):
         self.train_cads_embedded = False
 
     def unset_train_cads(self):
-        retrieval_head = self.roi_heads.alignment_head.retrieval_head
+        retrieval_head = self.roi_heads.retrieval_head
         retrieval_head.wild_points_by_class = None
         retrieval_head.wild_ids_by_class = None
         self.train_cads_embedded = False
@@ -137,7 +137,7 @@ class ROCA(nn.Module):
         return self._embed_cads(wild=True, batch_size=batch_size)
 
     def set_cad_models(self, points, ids, scene_data):
-        self.roi_heads.alignment_head.retrieval_head.inject_cad_models(
+        self.roi_heads.retrieval_head.inject_cad_models(
             points=points,
             ids=ids,
             scene_data=scene_data,
@@ -146,7 +146,7 @@ class ROCA(nn.Module):
         self.val_cads_embedded = False
 
     def unset_cad_models(self):
-        self.roi_heads.alignment_head.retrieval_head.eject_cad_models()
+        self.roi_heads.retrieval_head.eject_cad_models()
         self.val_cads_embedded = False
 
     def embed_cad_models(self, batch_size: int = 16):
@@ -154,7 +154,7 @@ class ROCA(nn.Module):
 
     @torch.no_grad()
     def _embed_cads(self, wild: bool = True, batch_size: int = 16):
-        retrieval_head = self.roi_heads.alignment_head.retrieval_head
+        retrieval_head = self.roi_heads.retrieval_head
         if wild:
             assert retrieval_head.has_wild_cads, \
                 'Call `set_train_cads` before embedding cads'
@@ -170,7 +170,7 @@ class ROCA(nn.Module):
         if not wild and self.val_cads_embedded:
             return
 
-        is_voxel = self.roi_heads.alignment_head.retrieval_head.is_voxel
+        is_voxel = self.roi_heads.retrieval_head.is_voxel
         for cat, points in points_by_class.items():
             embeds = []
             total_size = points.size(0) if not is_voxel else len(points)
