@@ -499,7 +499,6 @@ class AlignmentHead(nn.Module):
             shape_code,
             depth_points,
             scale,
-            alignment_classes
         )
 
         nocs = self.noc_head(noc_codes)
@@ -566,7 +565,7 @@ class AlignmentHead(nn.Module):
 
         return rot, losses, nocs, raw_nocs
 
-    def encode_shape_grid(self, shape_code, depth_points, scale, classes):
+    def encode_shape_grid(self, shape_code, depth_points, scale):
         shape_code_grid = shape_code\
             .view(*shape_code.size(), 1, 1)\
             .expand(*shape_code.size(), *depth_points.size()[-2:])
