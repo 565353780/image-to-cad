@@ -16,7 +16,7 @@ from image_to_cad.Method.retrieval_ops import \
     nearest_points_retrieval, random_retrieval, voxelize_nocs
 
 class RetrievalHead(nn.Module):
-    def __init__(self, cfg, shape_code_size, margin=0.5):
+    def __init__(self, cfg, shape_code_size=512, margin=0.5):
         super().__init__()
         self.has_cads = False
         self.mode = cfg.MODEL.RETRIEVAL_MODE
@@ -132,8 +132,6 @@ class RetrievalHead(nn.Module):
         has_alignment=None,
         scenes=None,
         instances=None,
-        predictions=None,
-        extra_outputs=None,
         pred_scales=None,
         pred_transes=None,
         pred_rots=None,
@@ -199,9 +197,7 @@ class RetrievalHead(nn.Module):
                 pos_cads,
                 neg_cads
             )
-            extra_outputs['cad_ids'] = cad_ids
-            predictions['pred_indices'] = pred_indices
-        return predictions, extra_outputs, losses
+        return pred_indices, cad_ids, losses
 
     def forward_retrieval(
         self,
