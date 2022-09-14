@@ -268,7 +268,7 @@ class AlignmentHead(nn.Module):
         }
 
         extra_outputs = {'cad_ids': []}
-        return predictions, losses, extra_outputs
+        return predictions, extra_outputs, losses
 
     def _encode_shape(
         self,
