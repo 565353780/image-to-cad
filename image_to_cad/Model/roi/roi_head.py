@@ -157,20 +157,13 @@ class ROCAROIHeads(StandardROIHeads):
         if self.training:
             class_weights = self.class_weights[gt_classes + 1]
 
-        xy_grid = None
-        xy_grid_n = None
-        if self.training:
-            proposal_boxes = [x.proposal_boxes for x in instances]
-            boxes = Boxes.cat(proposal_boxes)
-            batch_size = features.size(0)
-
-            # Create xy-grids for back-projection and cropping, respectively
-            xy_grid, xy_grid_n = create_xy_grids(
-                boxes,
-                image_size,
-                batch_size,
-                self.output_grid_size
-            )
+        # Create xy-grids for back-projection and cropping, respectively
+        xy_grid, xy_grid_n = create_xy_grids(
+            Boxes.cat(pool_boxes),
+            image_size,
+            features.size(0),
+            self.output_grid_size
+        )
 
         mask_probs, mask_pred, mask_gt, mask_losses = self.forward_mask(
             features,
@@ -203,7 +196,6 @@ class ROCAROIHeads(StandardROIHeads):
 
         if not self.training:
             instance_sizes = [len(x) for x in instances]
-
             # Fill the instances
             for name, preds in predictions.items():
                 for instance, pred in zip(instances, preds.split(instance_sizes)):
