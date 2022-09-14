@@ -121,6 +121,88 @@ class RetrievalHead(nn.Module):
             self.has_cads = False
         return
 
+    def forward_new(
+        self,
+        pred_classes=None,
+        masks=None,
+        nocs=None,
+        shape_code=None,
+        instance_sizes=None,
+        has_alignment=None,
+        scenes=None,
+        instances=None,
+        predictions=None,
+        extra_outputs=None,
+        pred_scales=None,
+        pred_transes=None,
+        pred_rots=None,
+        depth_points=None,
+        pred_nocs=None,
+        pred_masks=None,
+    ):
+        losses = {}
+
+        noc_points = None
+        pos_cads = None
+        neg_cads = None
+        if self.training:
+            pos_cads = L.cat([p.gt_pos_cads for p in instances])
+            neg_cads = L.cat([p.gt_neg_cads for p in instances])
+            # TODO: make this configurable
+            sample = torch.randperm(pos_cads.size(0))[:32]
+            masks = masks[sample]
+            noc_points = nocs[sample]
+            shape_code = shape_code[sample]
+            has_alignment = None
+            pos_cads = pos_cads[sample]
+            neg_cads = neg_cads[sample]
+        elif self.has_cads:
+            assert scenes is not None
+            if pred_nocs is not None:
+                noc_points = pred_nocs
+            else:
+                rotation_mats = Rotations(pred_rots)\
+                    .as_rotation_matrices()\
+                    .mats
+                noc_points = inverse_transform(
+                    depth_points,
+                    pred_masks,
+                    pred_scales,
+                    rotation_mats,
+                    pred_transes
+                )
+
+        cad_ids, pred_indices = None, None
+        if self.training:
+            cad_ids, pred_indices, retrieval_losses = self.retrieval_head(
+                pred_classes,
+                masks,
+                noc_points,
+                shape_code,
+                instance_sizes,
+                has_alignment,
+                scenes,
+                pos_cads,
+                neg_cads
+            )
+            losses.update(retrieval_losses)
+        elif self.has_cads:
+            cad_ids, pred_indices, _ = self.retrieval_head(
+                pred_classes,
+                pred_masks,
+                noc_points,
+                shape_code,
+                instance_sizes,
+                has_alignment,
+                scenes,
+                pos_cads,
+                neg_cads
+            )
+            extra_outputs['cad_ids'] = cad_ids
+            predictions['pred_indices'] = pred_indices
+
+        return
+
     def forward(
         self,
         classes=None,
@@ -130,17 +212,19 @@ class RetrievalHead(nn.Module):
         instance_sizes=None,
         has_alignment=None,
         scenes=None,
-        wild_retrieval=False,
         pos_cads=None,
         neg_cads=None
     ):
+        if self.training:
+            assert pos_cads is not None
+            assert neg_cads is not None
+        else:
+            assert self.has_cads, 'No registered CAD models!'
+
         losses = {}
         cad_ids, pred_indices = None, None
 
         if self.training:
-            assert pos_cads is not None
-            assert neg_cads is not None
-
             noc_embed = self.embed_nocs(
                 shape_code=shape_code,
                 noc_points=noc_points,
@@ -156,12 +240,6 @@ class RetrievalHead(nn.Module):
             pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
             losses['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
         else:
-            # Lookup for CAD ids at inference
-            if wild_retrieval:
-                assert self.has_wild_cads, 'No registered wild CAD models'
-            else:
-                assert self.has_cads, 'No registered CAD models!'
-
             scenes = list(chain(*(
                 [scene] * isize
                 for scene, isize in zip(scenes, instance_sizes)
@@ -173,7 +251,7 @@ class RetrievalHead(nn.Module):
                 masks,
                 scenes,
                 noc_points,
-                wild_retrieval=wild_retrieval,
+                wild_retrieval=False,
                 shape_code=shape_code
             )
 
