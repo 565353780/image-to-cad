@@ -26,8 +26,6 @@ from image_to_cad.Method.alignment_ops import \
     back_project, depth_bbox, depth_bbox_center, inverse_transform, \
     irls, make_new, point_count, point_mean, transform
 
-from image_to_cad.Model.retrieval.retrieval_head import RetrievalHead
-
 class AlignmentHead(nn.Module):
     def __init__(self, cfg, num_classes, input_channels):
         super().__init__()
@@ -83,9 +81,6 @@ class AlignmentHead(nn.Module):
             # hidden_size=512,
             output_size=self.num_classes,
             output_activation=nn.Sigmoid)
-
-        # Initialize the retrieval head
-        self.retrieval_head = RetrievalHead(cfg, shape_code_size)
         return
 
     @property
@@ -102,16 +97,14 @@ class AlignmentHead(nn.Module):
         mask_pred,
         xy_grid,
         xy_grid_n,
+        alignment_classes,
         inference_args=None,
-        scenes=None,
         gt_depths=None,
-        gt_classes=None,
         class_weights=None,
         mask_gt=None
     ):
         losses = {}
         predictions = {}
-        extra_outputs = {}
 
         instance_sizes = [len(x) for x in instances]
 
@@ -128,7 +121,7 @@ class AlignmentHead(nn.Module):
         else:
             pred_boxes = [x.pred_boxes for x in instances]
 
-        shape_code = self._encode_shape(
+        shape_code = self.encode_shape(
             pred_boxes,
             mask_pred,
             depth_features,
@@ -162,11 +155,6 @@ class AlignmentHead(nn.Module):
                 class_weights
             )
         losses.update(depth_losses)
-
-        alignment_classes = gt_classes
-        if not self.training:
-            pred_classes = [x.pred_classes for x in instances]
-            alignment_classes = L.cat(pred_classes)
 
         scale_pred, scale_losses, scale_gt = self.forward_scale(
             shape_code,
@@ -223,26 +211,7 @@ class AlignmentHead(nn.Module):
         has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
         predictions['has_alignment'] = has_alignment
 
-        predictions, extra_outputs, retrieval_losses = self.retrieval_head(
-            alignment_classes,
-            mask_pred,
-            nocs,
-            shape_code,
-            instance_sizes,
-            has_alignment,
-            scenes,
-            instances,
-            predictions,
-            extra_outputs,
-            scale_pred,
-            trans_pred,
-            rot,
-            depth_points,
-            raw_nocs,
-            mask_pred
-        )
-        losses.update(retrieval_losses)
-        return predictions, extra_outputs, losses
+        return predictions, losses, [nocs, shape_code, depth_points, raw_nocs]
 
     def identity(self):
         losses = {}
@@ -259,7 +228,7 @@ class AlignmentHead(nn.Module):
         extra_outputs = {'cad_ids': []}
         return predictions, extra_outputs, losses
 
-    def _encode_shape(
+    def encode_shape(
         self,
         pred_boxes,
         pred_masks,
