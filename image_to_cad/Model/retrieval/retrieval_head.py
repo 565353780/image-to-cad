@@ -3,6 +3,7 @@
 
 import torch
 import torch.nn as nn
+import detectron2.layers as L
 from itertools import chain
 from collections import defaultdict
 
@@ -121,7 +122,7 @@ class RetrievalHead(nn.Module):
             self.has_cads = False
         return
 
-    def forward_new(
+    def forward(
         self,
         pred_classes=None,
         masks=None,
@@ -174,7 +175,7 @@ class RetrievalHead(nn.Module):
 
         cad_ids, pred_indices = None, None
         if self.training:
-            cad_ids, pred_indices, retrieval_losses = self.retrieval_head(
+            cad_ids, pred_indices, retrieval_losses = self.forward_retrieval(
                 pred_classes,
                 masks,
                 noc_points,
@@ -187,7 +188,7 @@ class RetrievalHead(nn.Module):
             )
             losses.update(retrieval_losses)
         elif self.has_cads:
-            cad_ids, pred_indices, _ = self.retrieval_head(
+            cad_ids, pred_indices, _ = self.forward_retrieval(
                 pred_classes,
                 pred_masks,
                 noc_points,
@@ -200,10 +201,9 @@ class RetrievalHead(nn.Module):
             )
             extra_outputs['cad_ids'] = cad_ids
             predictions['pred_indices'] = pred_indices
+        return predictions, extra_outputs, losses
 
-        return
-
-    def forward(
+    def forward_retrieval(
         self,
         classes=None,
         masks=None,
@@ -254,7 +254,6 @@ class RetrievalHead(nn.Module):
                 wild_retrieval=False,
                 shape_code=shape_code
             )
-
         return cad_ids, pred_indices, losses
 
     def embed_nocs(self, shape_code=None, noc_points=None, mask=None):

@@ -223,7 +223,7 @@ class AlignmentHead(nn.Module):
         has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
         predictions['has_alignment'] = has_alignment
 
-        predictions, retrieval_losses, extra_outputs = self.forward_retrieval(
+        predictions, extra_outputs, retrieval_losses = self.retrieval_head(
             alignment_classes,
             mask_pred,
             nocs,
@@ -633,86 +633,4 @@ class AlignmentHead(nn.Module):
 
         mask_probs = new_probs
         return mask_probs
-
-    def forward_retrieval(
-        self,
-        pred_classes=None,
-        masks=None,
-        nocs=None,
-        shape_code=None,
-        instance_sizes=None,
-        has_alignment=None,
-        scenes=None,
-        instances=None, 
-        predictions=None,
-        extra_outputs=None,
-        pred_scales=None,
-        pred_transes=None,
-        pred_rots=None,
-        depth_points=None,
-        pred_nocs=None,
-        pred_masks=None,
-    ):
-        losses = {}
-
-        noc_points = None
-        pos_cads = None
-        neg_cads = None
-        if self.training:
-            pos_cads = L.cat([p.gt_pos_cads for p in instances])
-            neg_cads = L.cat([p.gt_neg_cads for p in instances])
-            # TODO: make this configurable
-            sample = torch.randperm(pos_cads.size(0))[:32]
-            masks = masks[sample]
-            noc_points = nocs[sample]
-            shape_code = shape_code[sample]
-            has_alignment = None
-            pos_cads = pos_cads[sample]
-            neg_cads = neg_cads[sample]
-        elif self.retrieval_head.has_cads:
-            assert scenes is not None
-            if pred_nocs is not None:
-                noc_points = pred_nocs
-            else:
-                rotation_mats = Rotations(pred_rots)\
-                    .as_rotation_matrices()\
-                    .mats
-                noc_points = inverse_transform(
-                    depth_points,
-                    pred_masks,
-                    pred_scales,
-                    rotation_mats,
-                    pred_transes
-                )
-
-        cad_ids, pred_indices = None, None
-        if self.training:
-            cad_ids, pred_indices, retrieval_losses = self.retrieval_head(
-                pred_classes,
-                masks,
-                noc_points,
-                shape_code,
-                instance_sizes,
-                has_alignment,
-                scenes,
-                pos_cads,
-                neg_cads
-            )
-            losses.update(retrieval_losses)
-        elif self.retrieval_head.has_cads:
-            cad_ids, pred_indices, _ = self.retrieval_head(
-                pred_classes,
-                pred_masks,
-                noc_points,
-                shape_code,
-                instance_sizes,
-                has_alignment,
-                scenes,
-                pos_cads,
-                neg_cads
-            )
-            extra_outputs['cad_ids'] = cad_ids
-            predictions['pred_indices'] = pred_indices
-
-        return predictions, losses, extra_outputs
 
