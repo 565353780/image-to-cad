@@ -114,11 +114,10 @@ class ROCA(nn.Module):
                     result['pred_image_depth'] = depth
 
             # Attach CAD ids
-            for cad_ids in ('cad_ids', 'wild_cad_ids'):
-                if cad_ids in extra_outputs:
-                    # indices are global, so all instances should have all CAD ids
-                    for result in results:
-                        result[cad_ids] = extra_outputs[cad_ids]
+            if 'cad_ids' in extra_outputs:
+                # indices are global, so all instances should have all CAD ids
+                for result in results:
+                    result['cad_ids'] = extra_outputs['cad_ids']
         return results, losses
 
     @property
