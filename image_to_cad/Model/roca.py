@@ -59,24 +59,35 @@ class ROCA(nn.Module):
         return processed_results
 
     def forward(self, batched_inputs):
+        inputs = {}
+        predictions = {}
         losses = {}
 
+        inputs['batched_inputs'] = batched_inputs
+
         images = self.preprocess_image(batched_inputs)
+        inputs['images'] = images
+        inputs['image_size'] = images[0].shape[-2:]
+
         features = self.backbone(images.tensor)
+        predictions['features'] = features
 
         gt_instances = None
         if self.training:
             gt_instances = [
                 x['instances'].to(self.device) for x in batched_inputs]
+        inputs['gt_instances'] = gt_instances
 
         proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
         losses.update(proposal_losses)
+        predictions['proposals'] = proposals
 
         targets = gt_instances
         if not self.training:
             targets = [
                 {'intrinsics': input['intrinsics'].to(self.device)}
                 for input in batched_inputs]
+        inputs['targets'] = targets
 
         image_depths = None
         if self.training:
@@ -84,19 +95,14 @@ class ROCA(nn.Module):
             for input in batched_inputs:
                 image_depths.append(input.pop('image_depth'))
             image_depths = torch.cat(image_depths, dim=0).to(self.device)
+        inputs['image_depths'] = image_depths
 
         scenes = None
         if not self.training:
             scenes = [input['scene'] for input in batched_inputs]
+        inputs['scenes'] = scenes
 
-        results, extra_outputs, detector_losses = self.roi_heads(
-            images,
-            features,
-            proposals,
-            targets,
-            image_depths,
-            scenes
-        )
+        results, extra_outputs, detector_losses = self.roi_heads(inputs, predictions)
         losses.update(detector_losses)
 
         if not self.training:
