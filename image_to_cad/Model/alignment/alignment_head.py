@@ -127,6 +127,7 @@ class AlignmentHead(nn.Module):
             depth_features,
             image_size
         )
+        predictions['shape_code'] = shape_code
 
         intrinsics = None
         if self.training:
@@ -155,6 +156,7 @@ class AlignmentHead(nn.Module):
                 class_weights
             )
         losses.update(depth_losses)
+        predictions['depth_points'] = depth_points
 
         scale_pred, scale_losses, scale_gt = self.forward_scale(
             shape_code,
@@ -175,12 +177,12 @@ class AlignmentHead(nn.Module):
             gt_depths,
             class_weights
         )
+        losses.update(trans_losses)
         predictions['pred_translations'] = trans_pred
 
         proc_depth_points = raw_depth_points
         if self.training:
             proc_depth_points = depth_points
-            losses.update(trans_losses)
 
         rot_gt = None
         if self.training:
@@ -203,6 +205,8 @@ class AlignmentHead(nn.Module):
         )
         losses.update(proc_losses)
         predictions['pred_rotations'] = rot
+        predictions['nocs'] = nocs
+        predictions['raw_nocs'] = raw_nocs
 
         if raw_nocs is not None:
             raw_nocs *= (mask_probs > 0.5)  # Keep all foreground NOCs!
@@ -211,7 +215,7 @@ class AlignmentHead(nn.Module):
         has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
         predictions['has_alignment'] = has_alignment
 
-        return predictions, losses, [nocs, shape_code, depth_points, raw_nocs]
+        return predictions, losses
 
     def identity(self):
         losses = {}
