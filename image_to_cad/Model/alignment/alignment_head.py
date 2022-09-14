@@ -118,13 +118,17 @@ class AlignmentHead(nn.Module):
         extra_outputs = {}
 
         instance_sizes = [len(x) for x in instances]
+        num_instances = sum(instance_sizes)
+        alignment_sizes = torch.tensor(instance_sizes, device=self.device)
 
+        if not self.training:
+            if num_instances == 0:
+                return self.identity()
+
+        pred_boxes = None
         if self.training:
             pred_boxes = [x.proposal_boxes for x in instances]
         else:
-            num_instances = sum(instance_sizes)
-            if num_instances == 0:
-                return self.identity()
             pred_boxes = [x.pred_boxes for x in instances]
 
         shape_code = self._encode_shape(
@@ -134,8 +138,7 @@ class AlignmentHead(nn.Module):
             image_size
         )
 
-        alignment_sizes = torch.tensor(instance_sizes, device=self.device)
-
+        intrinsics = None
         if self.training:
             intrinsics = Intrinsics.cat(
                 [p.gt_intrinsics for p in instances]
@@ -149,6 +152,7 @@ class AlignmentHead(nn.Module):
                     alignment_sizes, dim=0
                 )
 
+        if not self.training:
             xy_grid, xy_grid_n = create_xy_grids(
                 Boxes.cat(pred_boxes),
                 image_size,
@@ -157,48 +161,42 @@ class AlignmentHead(nn.Module):
             )
 
         depths, depth_points, raw_depth_points, depth_losses, gt_depths, gt_depth_points = \
-            self._forward_roi_depth(
+            self.forward_roi_depth(
                 xy_grid,
                 depths,
                 mask_pred,
                 intrinsics,
                 xy_grid_n,
                 alignment_sizes,
-                gt_masks=mask_gt,
-                gt_depths=gt_depths,
-                class_weights=class_weights
+                mask_gt,
+                gt_depths,
+                class_weights
             )
-
-        if self.training:
-            losses.update(depth_losses)
+        losses.update(depth_losses)
 
         alignment_classes = gt_classes
-        forward_instances = instances
         if not self.training:
             pred_classes = [x.pred_classes for x in instances]
             alignment_classes = L.cat(pred_classes)
-            forward_instances = None
 
-        scale_pred, scale_losses, scale_gt = self._forward_scale(
+        scale_pred, scale_losses, scale_gt = self.forward_scale(
             shape_code,
             alignment_classes,
-            forward_instances,
+            instances,
             class_weights
         )
+        losses.update(scale_losses)
         predictions['pred_scales'] = scale_pred
 
-        if self.training:
-            losses.update(scale_losses)
-
-        trans_pred, trans_losses, trans_gt = self._forward_trans(
+        trans_pred, trans_losses, trans_gt = self.forward_trans(
             shape_code,
             depths,
             depth_points,
             alignment_classes,
-            instances=forward_instances,
-            gt_depth_points=gt_depth_points,
-            gt_depths=gt_depths,
-            class_weights=class_weights
+            instances,
+            gt_depth_points,
+            gt_depths,
+            class_weights
         )
         predictions['pred_translations'] = trans_pred
 
@@ -210,6 +208,7 @@ class AlignmentHead(nn.Module):
         rot_gt = None
         if self.training:
             rot_gt = Rotations.cat([p.gt_rotations for p in instances]).tensor
+
         rot, proc_losses, nocs, raw_nocs = self._forward_proc(
             shape_code,
             proc_depth_points,
@@ -244,7 +243,7 @@ class AlignmentHead(nn.Module):
             instance_sizes,
             has_alignment,
             scenes,
-            forward_instances,
+            instances,
             predictions,
             extra_outputs,
             scale_pred,
@@ -259,19 +258,19 @@ class AlignmentHead(nn.Module):
         return predictions, losses, extra_outputs
 
     def identity(self):
-        if self.training:
-            return {}
-        else:
-            device = next(self.parameters()).device
-            predictions = {
-                'pred_scales': Scales.new_empty(0, device).tensor,
-                'pred_translations': Translations.new_empty(0, device).tensor,
-                'pred_rotations': Rotations.new_empty(0, device).tensor,
-                'has_alignment': torch.zeros(0, device=device).bool(),
-                'pred_indices': torch.zeros(0, device=device).long()
-            }
-            extra_outputs = {'cad_ids': []}
-            return predictions, extra_outputs
+        losses = {}
+
+        device = next(self.parameters()).device
+        predictions = {
+            'pred_scales': Scales.new_empty(0, device).tensor,
+            'pred_translations': Translations.new_empty(0, device).tensor,
+            'pred_rotations': Rotations.new_empty(0, device).tensor,
+            'has_alignment': torch.zeros(0, device=device).bool(),
+            'pred_indices': torch.zeros(0, device=device).long()
+        }
+
+        extra_outputs = {'cad_ids': []}
+        return predictions, losses, extra_outputs
 
     def _encode_shape(
         self,
@@ -298,13 +297,16 @@ class AlignmentHead(nn.Module):
         shape_code = self.shape_code_drop(shape_code)
         return shape_code
 
-    def _forward_scale(
+    def forward_scale(
         self,
         shape_code,
         alignment_classes,
         instances=None,
         class_weights=None
     ):
+        if self.training:
+            assert instances is not None
+
         losses = {}
 
         scales = select_classes(
@@ -315,7 +317,6 @@ class AlignmentHead(nn.Module):
 
         gt_scales = None
         if self.training:
-            assert instances is not None
             gt_scales = Scales.cat([p.gt_scales for p in instances]).tensor
             losses['loss_scale'] = l1_loss(
                 scales,
@@ -325,7 +326,7 @@ class AlignmentHead(nn.Module):
 
         return scales, losses, gt_scales
 
-    def _forward_roi_depth(
+    def forward_roi_depth(
         self,
         xy_grid,
         depths,
@@ -337,9 +338,13 @@ class AlignmentHead(nn.Module):
         gt_depths=None,
         class_weights=None
     ):
+        if self.training:
+            assert gt_masks is not None
+            assert gt_depths is not None
+
         losses = {}
 
-        depths, depth_points = self._crop_and_project_depth(
+        depths, depth_points = self.crop_and_project_depth(
             xy_grid,
             depths,
             intrinsics_inv,
@@ -347,13 +352,9 @@ class AlignmentHead(nn.Module):
             alignment_sizes
         )
 
-
         gt_depth_points = None
         if self.training:
-            assert gt_masks is not None
-            assert gt_depths is not None
-
-            gt_depths, gt_depth_points = self._crop_and_project_depth(
+            gt_depths, gt_depth_points = self.crop_and_project_depth(
                 xy_grid,
                 gt_depths,
                 intrinsics_inv,
@@ -368,10 +369,11 @@ class AlignmentHead(nn.Module):
                 weights=class_weights
             )
 
+            #FIXME: log this loss
             # Log metrics to tensorboard
             metric_dict = depth_metrics(depths, gt_depths, gt_masks,
                                         pref='depth/roi_')
-            print("[INFO][AlignmentHead::_forward_roi_depth]")
+            print("[INFO][AlignmentHead::forward_roi_depth]")
             print("\t depth_metrics")
             print(metric_dict)
 
@@ -395,7 +397,7 @@ class AlignmentHead(nn.Module):
 
         return depths, depth_points, raw_depth_points, losses, gt_depths, gt_depth_points
 
-    def _crop_and_project_depth(
+    def crop_and_project_depth(
         self,
         xy_grid,
         depths,
@@ -417,7 +419,7 @@ class AlignmentHead(nn.Module):
         )
         return depths, depth_points
 
-    def _forward_trans(
+    def forward_trans(
         self,
         shape_code,
         depths,
@@ -428,6 +430,11 @@ class AlignmentHead(nn.Module):
         gt_depths=None,
         class_weights=None
     ):
+        if self.training:
+            assert instances is not None
+            assert gt_depth_points is not None
+            assert gt_depths is not None
+
         losses = {}
 
         depth_center, depth_min, depth_max = depth_bbox_center(
@@ -450,10 +457,6 @@ class AlignmentHead(nn.Module):
 
         trans_gt = None
         if self.training:
-            assert instances is not None
-            assert gt_depth_points is not None
-            assert gt_depths is not None
-
             depth_min_gt, depth_max_gt = depth_bbox(gt_depth_points, gt_depths)
             losses['loss_depth_min'] = smooth_l1_loss(
                 depth_min,
@@ -466,8 +469,7 @@ class AlignmentHead(nn.Module):
                 weights=class_weights
             )
 
-            trans_gt = Translations.cat([p.gt_translations for p in instances])
-            trans_gt = trans_gt.tensor
+            trans_gt = Translations.cat([p.gt_translations for p in instances]).tensor
             losses['loss_trans'] = l2_loss(
                 trans,
                 trans_gt,
@@ -492,6 +494,13 @@ class AlignmentHead(nn.Module):
         gt_scale=None,
         class_weights=None
     ):
+        if self.training:
+            assert gt_depth_points is not None
+            assert gt_masks is not None
+            assert gt_trans is not None
+            assert gt_rot is not None
+            assert gt_scale is not None
+
         losses = {}
 
         # Untranslate depth using trans
@@ -499,12 +508,13 @@ class AlignmentHead(nn.Module):
         depth_points = inverse_transform(depth_points, trans=trans)
 
         # Compute the nocs
-        noc_codes = self._encode_shape_grid(
+        noc_codes = self.encode_shape_grid(
             shape_code,
             depth_points,
             scale,
             alignment_classes
         )
+
         nocs = self.noc_head(noc_codes)
         raw_nocs = nocs
         nocs = masks * nocs
@@ -514,7 +524,7 @@ class AlignmentHead(nn.Module):
         do_proc = has_enough.any()
         rot, trs = None, None
         if do_proc:
-            rot, trs = self._solve_proc(
+            rot, trs = self.solve_proc(
                 nocs,
                 depth_points,
                 noc_codes,
@@ -526,12 +536,6 @@ class AlignmentHead(nn.Module):
             )
 
         if self.training:
-            assert gt_depth_points is not None
-            assert gt_masks is not None
-            assert gt_trans is not None
-            assert gt_rot is not None
-            assert gt_scale is not None
-
             gt_rot = Rotations(gt_rot).as_rotation_matrices()
             gt_nocs = inverse_transform(
                 gt_depth_points,
@@ -575,10 +579,7 @@ class AlignmentHead(nn.Module):
 
         return rot, losses, nocs, raw_nocs
 
-    def _encode_shape_grid(self, shape_code, depth_points, scale, classes):
-        #  if self.use_noc_embedding:
-            #  shape_code = L.cat([shape_code, self.noc_embed(classes)], dim=-1)
-
+    def encode_shape_grid(self, shape_code, depth_points, scale, classes):
         shape_code_grid = shape_code\
             .view(*shape_code.size(), 1, 1)\
             .expand(*shape_code.size(), *depth_points.size()[-2:])
@@ -590,7 +591,7 @@ class AlignmentHead(nn.Module):
             depth_points.detach()
         ], dim=1)
 
-    def _solve_proc(
+    def solve_proc(
         self,
         nocs,
         depth_points,
@@ -603,7 +604,7 @@ class AlignmentHead(nn.Module):
     ):
         proc_masks = masks[has_enough]
         s_nocs = transform(nocs[has_enough], scale=scale[has_enough])
-        mask_probs = self._prep_mask_probs(
+        mask_probs = self.prep_mask_probs(
             mask_probs,
             noc_codes,
             nocs,
@@ -617,7 +618,7 @@ class AlignmentHead(nn.Module):
             weights=mask_probs,
             num_iter=1)
 
-    def _prep_mask_probs(
+    def prep_mask_probs(
         self,
         mask_probs,
         noc_codes,
@@ -627,6 +628,7 @@ class AlignmentHead(nn.Module):
     ):
         # use_noc_weights:
         assert mask_probs is not None
+
         if has_enough is not None:
             mask_probs = mask_probs[has_enough]
             noc_codes = noc_codes[has_enough]
@@ -667,7 +669,6 @@ class AlignmentHead(nn.Module):
         losses = {}
 
         noc_points = None
-        wild_retrieval = False
         pos_cads = None
         neg_cads = None
         if self.training:
@@ -707,12 +708,10 @@ class AlignmentHead(nn.Module):
                 instance_sizes,
                 has_alignment,
                 scenes,
-                wild_retrieval,
                 pos_cads,
                 neg_cads
             )
             losses.update(retrieval_losses)
-
         elif self.has_cads:
             cad_ids, pred_indices, _ = self.retrieval_head(
                 pred_classes,
@@ -722,7 +721,6 @@ class AlignmentHead(nn.Module):
                 instance_sizes,
                 has_alignment,
                 scenes,
-                wild_retrieval,
                 pos_cads,
                 neg_cads
             )
