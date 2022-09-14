@@ -74,18 +74,15 @@ class ROCAROIHeads(StandardROIHeads):
 
         image_size = images[0].shape[-2:]  # Assume single image size!
 
-        alignment_instances = None
-        inference_args = None
         if self.training:
             proposals = self.label_and_sample_proposals(proposals, targets)
-            alignment_instances = proposals
-        else:
-            inference_args = targets
 
         pred_instances, box_losses = self.forward_box(features, proposals)
-        if not self.training:
-            alignment_instances = pred_instances
         losses.update(box_losses)
+
+        instances = proposals
+        if not self.training:
+            instances = pred_instances
 
         depths, depth_features, depth_losses = self.depth_head(features, gt_depths)
         losses.update(depth_losses)
@@ -93,19 +90,18 @@ class ROCAROIHeads(StandardROIHeads):
 
         pred_instances, alignment_outputs, alignment_losses = self.forward_alignment(
             features,
-            alignment_instances,
+            instances,
             image_size,
             depths,
             depth_features,
-            inference_args,
+            targets,
             gt_depths,
             scenes
         )
         losses.update(alignment_losses)
-
         extra_outputs.update(alignment_outputs)
 
-        return pred_instances, extra_outputs, proposals, losses
+        return pred_instances, extra_outputs, losses
 
     def forward_box(self, features, proposals):
         self.box_predictor.set_class_weights(self.class_weights)
@@ -130,8 +126,6 @@ class ROCAROIHeads(StandardROIHeads):
     ):
         losses = {}
 
-        features = [features[f] for f in self.in_features]
-
         if self.training:
             instances, _ = select_foreground_proposals(
                 instances, self.num_classes
@@ -140,21 +134,35 @@ class ROCAROIHeads(StandardROIHeads):
             score_flt = [p.scores >= self.test_min_score for p in instances]
             instances = [p[flt] for p, flt in zip(instances, score_flt)]
 
-        mask_classes = None
-        xy_grid = None
-        xy_grid_n = None
-        class_weights = None
+        pool_boxes = None
+        if self.training:
+            pool_boxes = [x.proposal_boxes for x in instances]
+        else:
+            pool_boxes = [x.pred_boxes for x in instances]
+
+        features = [features[f] for f in self.in_features]
+        features = self.mask_pooler(features, pool_boxes)
+
         gt_classes = None
         if self.training:
+            gt_classes = L.cat([p.gt_classes for p in instances])
+
+        mask_classes = gt_classes
+        if not self.training:
+            pred_classes = [x.pred_classes for x in instances]
+            pred_classes = L.cat(pred_classes)
+            mask_classes = pred_classes
+
+        class_weights = None
+        if self.training:
+            class_weights = self.class_weights[gt_classes + 1]
+
+        xy_grid = None
+        xy_grid_n = None
+        if self.training:
             proposal_boxes = [x.proposal_boxes for x in instances]
-            features = self.mask_pooler(features, proposal_boxes)
             boxes = Boxes.cat(proposal_boxes)
             batch_size = features.size(0)
-            gt_classes = L.cat([p.gt_classes for p in instances])
-            mask_classes = gt_classes
-
-            # Get class weight for losses
-            class_weights = self.class_weights[gt_classes + 1]
 
             # Create xy-grids for back-projection and cropping, respectively
             xy_grid, xy_grid_n = create_xy_grids(
@@ -163,13 +171,6 @@ class ROCAROIHeads(StandardROIHeads):
                 batch_size,
                 self.output_grid_size
             )
-        else:
-            pred_classes = [x.pred_classes for x in instances]
-            mask_classes = L.cat(pred_classes)
-            pred_boxes = [x.pred_boxes for x in instances]
-            features = self.mask_pooler(features, pred_boxes)
-
-        instance_sizes = [len(x) for x in instances]
 
         # Mask
         mask_probs, mask_pred, mask_losses, mask_gt = self.forward_mask(
@@ -194,6 +195,8 @@ class ROCAROIHeads(StandardROIHeads):
         predictions['pred_masks'] = mask_probs
 
         if not self.training:
+            instance_sizes = [len(x) for x in instances]
+
             # Fill the instances
             for name, preds in predictions.items():
                 for instance, pred in zip(instances, preds.split(instance_sizes)):
