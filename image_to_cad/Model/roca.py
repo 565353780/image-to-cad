@@ -70,6 +70,7 @@ class ROCA(nn.Module):
                 x['instances'].to(self.device) for x in batched_inputs]
 
         proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
+        losses.update(proposal_losses)
 
         targets = gt_instances
         if not self.training:
@@ -88,7 +89,7 @@ class ROCA(nn.Module):
         if not self.training:
             scenes = [input['scene'] for input in batched_inputs]
 
-        results, extra_outputs, _, detector_losses = self.roi_heads(
+        results, extra_outputs, detector_losses = self.roi_heads(
             images,
             features,
             proposals,
@@ -96,9 +97,7 @@ class ROCA(nn.Module):
             image_depths,
             scenes
         )
-
         losses.update(detector_losses)
-        losses.update(proposal_losses)
 
         if not self.training:
             results = self.postprocess(
