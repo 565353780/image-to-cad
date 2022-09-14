@@ -42,10 +42,12 @@ class DepthHead(nn.Module):
         return self.fpn_depth_features.out_channels
 
     def forward(self, features, depth_gt=None):
+        if self.training:
+            assert depth_gt is not None
+
         losses = {}
 
         if self.training:
-            assert depth_gt is not None
             mask = depth_gt > 1e-5
             flt = mask.flatten(1).any(1)
 
