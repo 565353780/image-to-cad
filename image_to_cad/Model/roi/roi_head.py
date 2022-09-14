@@ -182,7 +182,7 @@ class ROCAROIHeads(StandardROIHeads):
         losses.update(mask_losses)
         predictions['pred_masks'] = mask_probs
 
-        alignment_predictions, alignment_losses, extra_outputs = self.alignment_head(
+        alignment_predictions, extra_outputs, alignment_losses = self.alignment_head(
             instances,
             depth_features,
             depths,

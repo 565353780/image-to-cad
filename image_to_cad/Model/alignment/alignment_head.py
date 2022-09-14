@@ -253,7 +253,7 @@ class AlignmentHead(nn.Module):
             mask_pred
         )
         losses.update(retrieval_losses)
-        return predictions, losses, extra_outputs
+        return predictions, extra_outputs, losses
 
     def identity(self):
         losses = {}
