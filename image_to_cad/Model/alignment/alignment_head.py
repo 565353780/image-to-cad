@@ -21,7 +21,7 @@ from image_to_cad.Loss.loss_functions import \
 
 from image_to_cad.Metric.logging_metrics import depth_metrics
 
-from image_to_cad.Method.common_ops import create_xy_grids, select_classes
+from image_to_cad.Method.common_ops import select_classes
 from image_to_cad.Method.alignment_ops import \
     back_project, depth_bbox, depth_bbox_center, inverse_transform, \
     irls, make_new, point_count, point_mean, transform
@@ -118,6 +118,7 @@ class AlignmentHead(nn.Module):
         extra_outputs = {}
 
         instance_sizes = [len(x) for x in instances]
+
         num_instances = sum(instance_sizes)
         alignment_sizes = torch.tensor(instance_sizes, device=self.device)
 
@@ -151,14 +152,6 @@ class AlignmentHead(nn.Module):
                 intrinsics = intrinsics.repeat_interleave(
                     alignment_sizes, dim=0
                 )
-
-        if not self.training:
-            xy_grid, xy_grid_n = create_xy_grids(
-                Boxes.cat(pred_boxes),
-                image_size,
-                num_instances,
-                self.output_grid_size
-            )
 
         depths, depth_points, raw_depth_points, depth_losses, gt_depths, gt_depth_points = \
             self.forward_roi_depth(
