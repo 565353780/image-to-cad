@@ -125,6 +125,7 @@ class ROCAROIHeads(StandardROIHeads):
         scenes=None
     ):
         losses = {}
+        predictions = {}
 
         if self.training:
             instances, _ = select_foreground_proposals(
@@ -150,8 +151,7 @@ class ROCAROIHeads(StandardROIHeads):
         mask_classes = gt_classes
         if not self.training:
             pred_classes = [x.pred_classes for x in instances]
-            pred_classes = L.cat(pred_classes)
-            mask_classes = pred_classes
+            mask_classes = L.cat(pred_classes)
 
         class_weights = None
         if self.training:
@@ -172,27 +172,34 @@ class ROCAROIHeads(StandardROIHeads):
                 self.output_grid_size
             )
 
-        # Mask
-        mask_probs, mask_pred, mask_losses, mask_gt = self.forward_mask(
+        mask_probs, mask_pred, mask_gt, mask_losses = self.forward_mask(
             features,
             mask_classes,
             instances,
             xy_grid_n,
             class_weights
         )
-
         losses.update(mask_losses)
+        predictions['pred_masks'] = mask_probs
 
-        predictions, alignment_losses, extra_outputs = self.alignment_head(
-            instances, depth_features, depths,
-            image_size, mask_probs, mask_pred,
-            inference_args, scenes, gt_depths,
-            gt_classes, class_weights, xy_grid,
-            xy_grid_n, mask_gt
+        alignment_predictions, alignment_losses, extra_outputs = self.alignment_head(
+            instances,
+            depth_features,
+            depths,
+            image_size,
+            mask_probs,
+            mask_pred,
+            inference_args,
+            scenes,
+            gt_depths,
+            gt_classes,
+            class_weights,
+            xy_grid,
+            xy_grid_n,
+            mask_gt
         )
         losses.update(alignment_losses)
-
-        predictions['pred_masks'] = mask_probs
+        predictions.update(alignment_predictions)
 
         if not self.training:
             instance_sizes = [len(x) for x in instances]
@@ -211,6 +218,10 @@ class ROCAROIHeads(StandardROIHeads):
         xy_grid_n=None,
         class_weights=None
     ):
+        if self.training:
+            assert instances is not None
+            assert xy_grid_n is not None
+
         mask_logits = self.mask_head.layers(features)
         mask_logits = select_classes(mask_logits, self.num_classes + 1, classes)
 
@@ -224,8 +235,6 @@ class ROCAROIHeads(StandardROIHeads):
 
         mask_gt = None
         if self.training:
-            assert instances is not None
-            assert xy_grid_n is not None
             mask_gt = Masks\
                 .cat([p.gt_masks for p in instances])\
                 .crop_and_resize_with_grid(xy_grid_n, self.output_grid_size)
@@ -239,7 +248,7 @@ class ROCAROIHeads(StandardROIHeads):
 
         mask_pred = mask_pred.to(mask_probs.dtype)
 
-        return mask_probs, mask_pred, losses, mask_gt
+        return mask_probs, mask_pred, mask_gt, losses
 
     def mask_loss(
         self,
