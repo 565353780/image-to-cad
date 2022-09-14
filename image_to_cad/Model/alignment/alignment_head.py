@@ -224,8 +224,7 @@ class AlignmentHead(nn.Module):
             gt_scale=scale_gt,
             class_weights=class_weights
         )
-        if self.training:
-            losses.update(proc_losses)
+        losses.update(proc_losses)
         predictions['pred_rotations'] = rot
 
         if raw_nocs is not None:
@@ -253,8 +252,7 @@ class AlignmentHead(nn.Module):
             raw_nocs,
             mask_pred
         )
-        if self.training:
-            losses.update(retrieval_losses)
+        losses.update(retrieval_losses)
         return predictions, losses, extra_outputs
 
     def identity(self):
