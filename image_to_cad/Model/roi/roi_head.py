@@ -18,6 +18,7 @@ from image_to_cad.Metric.logging_metrics import mask_metrics
 from image_to_cad.Model.depth.depth_head import DepthHead
 from image_to_cad.Model.roi.weighted_fast_rcnn_output_layers import WeightedFastRCNNOutputLayers
 from image_to_cad.Model.alignment.alignment_head import AlignmentHead
+from image_to_cad.Model.retrieval.retrieval_head import RetrievalHead
 
 from image_to_cad.Method.common_ops import create_xy_grids, select_classes
 
@@ -31,6 +32,7 @@ class ROCAROIHeads(StandardROIHeads):
         self.box_predictor = WeightedFastRCNNOutputLayers(cfg, self.box_head.output_shape)
         self.depth_head = DepthHead(cfg, self.in_features)
         self.alignment_head = AlignmentHead(cfg, self.num_classes, self.depth_head.out_channels)
+        self.retrieval_head = RetrievalHead(cfg)
         self.mask_head.predictor = nn.Conv2d(
             self.mask_head.deconv.out_channels, self.num_classes + 1, kernel_size=(1, 1))
 
@@ -122,6 +124,7 @@ class ROCAROIHeads(StandardROIHeads):
     ):
         losses = {}
         predictions = {}
+        extra_outputs = {}
 
         if self.training:
             instances, _ = select_foreground_proposals(
@@ -171,7 +174,12 @@ class ROCAROIHeads(StandardROIHeads):
         losses.update(mask_losses)
         predictions['pred_masks'] = mask_probs
 
-        alignment_predictions, extra_outputs, alignment_losses = self.alignment_head(
+        alignment_classes = gt_classes
+        if not self.training:
+            pred_classes = [x.pred_classes for x in instances]
+            alignment_classes = L.cat(pred_classes)
+
+        alignment_predictions, alignment_losses, retrieval_data_list = self.alignment_head(
             instances,
             depth_features,
             depths,
@@ -180,18 +188,43 @@ class ROCAROIHeads(StandardROIHeads):
             mask_pred,
             xy_grid,
             xy_grid_n,
+            alignment_classes,
             inference_args,
-            scenes,
             gt_depths,
-            gt_classes,
             class_weights,
             mask_gt
         )
         losses.update(alignment_losses)
         predictions.update(alignment_predictions)
 
+        nocs, shape_code, depth_points, raw_nocs = retrieval_data_list
+        instance_sizes = [len(x) for x in instances]
+        has_alignment = predictions['has_alignment']
+        scale_pred = predictions['pred_scales']
+        trans_pred = predictions['pred_translations']
+        rot = predictions['pred_rotations']
+
+        pred_indices, cad_ids, retrieval_losses = self.retrieval_head(
+            alignment_classes,
+            mask_pred,
+            nocs,
+            shape_code,
+            instance_sizes,
+            has_alignment,
+            scenes,
+            instances,
+            scale_pred,
+            trans_pred,
+            rot,
+            depth_points,
+            raw_nocs,
+            mask_pred
+        )
+        losses.update(retrieval_losses)
+        predictions['pred_indices'] = pred_indices
+        extra_outputs['cad_ids'] = cad_ids
+
         if not self.training:
-            instance_sizes = [len(x) for x in instances]
             # Fill the instances
             for name, preds in predictions.items():
                 for instance, pred in zip(instances, preds.split(instance_sizes)):
