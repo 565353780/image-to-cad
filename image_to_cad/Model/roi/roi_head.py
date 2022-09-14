@@ -48,10 +48,6 @@ class ROCAROIHeads(StandardROIHeads):
         self.register_buffer('class_weights', class_weight_tensor)
         return
 
-    @property
-    def has_cads(self):
-        return self.alignment_head.has_cads
-
     def set_verbose(self, verbose=True):
         self.verbose = verbose
         return
@@ -182,13 +178,13 @@ class ROCAROIHeads(StandardROIHeads):
             image_size,
             mask_probs,
             mask_pred,
+            xy_grid,
+            xy_grid_n,
             inference_args,
             scenes,
             gt_depths,
             gt_classes,
             class_weights,
-            xy_grid,
-            xy_grid_n,
             mask_gt
         )
         losses.update(alignment_losses)

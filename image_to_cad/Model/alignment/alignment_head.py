@@ -89,10 +89,6 @@ class AlignmentHead(nn.Module):
         return
 
     @property
-    def has_cads(self):
-        return self.retrieval_head.has_cads
-
-    @property
     def device(self):
         return next(self.parameters()).device
 
@@ -104,13 +100,13 @@ class AlignmentHead(nn.Module):
         image_size,
         mask_probs,
         mask_pred,
+        xy_grid,
+        xy_grid_n,
         inference_args=None,
         scenes=None,
         gt_depths=None,
         gt_classes=None,
         class_weights=None,
-        xy_grid=None,
-        xy_grid_n=None,
         mask_gt=None
     ):
         losses = {}
@@ -673,7 +669,7 @@ class AlignmentHead(nn.Module):
             has_alignment = None
             pos_cads = pos_cads[sample]
             neg_cads = neg_cads[sample]
-        elif self.has_cads:
+        elif self.retrieval_head.has_cads:
             assert scenes is not None
             if pred_nocs is not None:
                 noc_points = pred_nocs
@@ -703,7 +699,7 @@ class AlignmentHead(nn.Module):
                 neg_cads
             )
             losses.update(retrieval_losses)
-        elif self.has_cads:
+        elif self.retrieval_head.has_cads:
             cad_ids, pred_indices, _ = self.retrieval_head(
                 pred_classes,
                 pred_masks,
