@@ -90,22 +90,14 @@ class AlignmentHead(nn.Module):
     def forward(self, inputs, predictions):
         losses = {}
 
-        instance_sizes = [len(x) for x in predictions['alignment_instances']]
-
-        num_instances = sum(instance_sizes)
-        alignment_sizes = torch.tensor(instance_sizes, device=self.device)
+        num_instances = sum(predictions['alignment_instance_sizes'])
+        predictions['alignment_sizes'] = torch.tensor(predictions['alignment_instance_sizes'], device=self.device)
 
         if not self.training:
             if num_instances == 0:
                 return self.identity()
 
-        shape_code = self.encode_shape(
-            predictions['pool_boxes'],
-            predictions['mask_pred'],
-            predictions['depth_features'],
-            inputs['image_size']
-        )
-        predictions['shape_code'] = shape_code
+        predictions = self.encode_shape(inputs, predictions)
 
         intrinsics = None
         if self.training:
@@ -118,26 +110,17 @@ class AlignmentHead(nn.Module):
             ).tensor.inverse()
             if intrinsics.size(0) > 1:
                 intrinsics = intrinsics.repeat_interleave(
-                    alignment_sizes, dim=0
+                    predictions['alignment_sizes'], dim=0
                 )
+        predictions['intrinsics'] = intrinsics
 
         depths, depth_points, raw_depth_points, depth_losses, gt_depths, gt_depth_points = \
-            self.forward_roi_depth(
-                predictions['xy_grid'],
-                predictions['depths'],
-                predictions['mask_pred'],
-                intrinsics,
-                predictions['xy_grid_n'],
-                alignment_sizes,
-                predictions['mask_gt'],
-                inputs['image_depths'],
-                predictions['class_weights']
-            )
+            self.forward_roi_depth(inputs, predictions)
         losses.update(depth_losses)
         predictions['depth_points'] = depth_points
 
         scale_pred, scale_losses, scale_gt = self.forward_scale(
-            shape_code,
+            predictions['shape_code'],
             predictions['alignment_classes'],
             predictions['alignment_instances'],
             predictions['class_weights']
@@ -146,7 +129,7 @@ class AlignmentHead(nn.Module):
         predictions['pred_scales'] = scale_pred
 
         trans_pred, trans_losses, trans_gt = self.forward_trans(
-            shape_code,
+            predictions['shape_code'],
             depths,
             depth_points,
             predictions['alignment_classes'],
@@ -167,7 +150,7 @@ class AlignmentHead(nn.Module):
             rot_gt = Rotations.cat([p.gt_rotations for p in predictions['alignment_instances']]).tensor
 
         rot, proc_losses, nocs, raw_nocs = self._forward_proc(
-            shape_code,
+            predictions['shape_code'],
             proc_depth_points,
             predictions['mask_pred'],
             trans_pred,
@@ -190,7 +173,7 @@ class AlignmentHead(nn.Module):
             raw_nocs *= (predictions['mask_probs'] > 0.5)  # Keep all foreground NOCs!
 
         # Do the retrieval
-        has_alignment = torch.ones(sum(instance_sizes), dtype=torch.bool)
+        has_alignment = torch.ones(num_instances, dtype=torch.bool)
         predictions['has_alignment'] = has_alignment
 
         return predictions, losses
@@ -210,30 +193,27 @@ class AlignmentHead(nn.Module):
         extra_outputs = {'cad_ids': []}
         return predictions, extra_outputs, losses
 
-    def encode_shape(
-        self,
-        pred_boxes,
-        pred_masks,
-        depth_features,
-        image_size
-    ):
+    def encode_shape(self, inputs, predictions):
         scaled_boxes = []
-        for b in pred_boxes:
+        for b in predictions['pool_boxes']:
             b = Boxes(b.tensor.detach().clone())
             b.scale(
-                depth_features.shape[-1] / image_size[-1],
-                depth_features.shape[-2] / image_size[-2]
+                predictions['depth_features'].shape[-1] / inputs['image_size'][-1],
+                predictions['depth_features'].shape[-2] / inputs['image_size'][-2]
             )
             scaled_boxes.append(b.tensor)
 
         shape_features = L.roi_align(
-            depth_features,
+            predictions['depth_features'],
             scaled_boxes,
             self.output_grid_size
         )
-        shape_code = self.shape_encoder(shape_features, pred_masks)
+        predictions['shape_features'] = shape_features
+
+        shape_code = self.shape_encoder(shape_features, predictions['mask_pred'])
         shape_code = self.shape_code_drop(shape_code)
-        return shape_code
+        predictions['shape_code'] = shape_code
+        return predictions
 
     def forward_scale(
         self,
@@ -264,73 +244,63 @@ class AlignmentHead(nn.Module):
 
         return scales, losses, gt_scales
 
-    def forward_roi_depth(
-        self,
-        xy_grid,
-        depths,
-        pred_masks,
-        intrinsics_inv,
-        xy_grid_n,
-        alignment_sizes,
-        gt_masks=None,
-        gt_depths=None,
-        class_weights=None
-    ):
+    def forward_roi_depth(self, inputs, predictions):
         if self.training:
-            assert gt_masks is not None
-            assert gt_depths is not None
+            assert predictions['mask_gt'] is not None
+            assert inputs['image_depths'] is not None
 
         losses = {}
 
         depths, depth_points = self.crop_and_project_depth(
-            xy_grid,
-            depths,
-            intrinsics_inv,
-            xy_grid_n,
-            alignment_sizes
+            predictions['xy_grid'],
+            predictions['depths'],
+            predictions['intrinsics'],
+            predictions['xy_grid_n'],
+            predictions['alignment_sizes'],
         )
 
+        gt_depths = None
         gt_depth_points = None
         if self.training:
             gt_depths, gt_depth_points = self.crop_and_project_depth(
-                xy_grid,
-                gt_depths,
-                intrinsics_inv,
-                xy_grid_n,
-                alignment_sizes
+                predictions['xy_grid'],
+                inputs['image_depths'],
+                predictions['intrinsics'],
+                predictions['xy_grid_n'],
+                predictions['alignment_sizes'],
             )
 
             losses['loss_roi_depth'] = masked_l1_loss(
                 depths,
                 gt_depths,
-                gt_masks,
-                weights=class_weights
+                predictions['mask_gt'],
+                weights=predictions['class_weights']
             )
 
             #FIXME: log this loss
             # Log metrics to tensorboard
-            metric_dict = depth_metrics(depths, gt_depths, gt_masks,
+            metric_dict = depth_metrics(depths, gt_depths, predictions['mask_gt'],
                                         pref='depth/roi_')
             print("[INFO][AlignmentHead::forward_roi_depth]")
             print("\t depth_metrics")
             print(metric_dict)
 
         raw_depth_points = depth_points.clone()
-        depths = depths * pred_masks
-        depth_points = depth_points * pred_masks
+        depths = depths * predictions['mask_pred']
+        depth_points = depth_points * predictions['mask_pred']
 
         if self.training:
-            gt_depths = gt_depths * gt_masks
-            gt_depth_points = gt_depth_points * gt_masks
+            gt_depths = gt_depths * predictions['mask_gt']
+            gt_depth_points = gt_depth_points * predictions['mask_gt']
 
             # Penalize depth means
             # TODO: make this loss optional
-            depth_mean_pred = point_mean(depths, point_count(pred_masks))
-            depth_mean_gt = point_mean(gt_depths, point_count(gt_masks))
+            depth_mean_pred = point_mean(depths, point_count(predictions['mask_pred']))
+            depth_mean_gt = point_mean(gt_depths, point_count(predictions['mask_gt']))
             losses['loss_mean_depth'] = l1_loss(
                 depth_mean_pred,
                 depth_mean_gt,
-                weights=class_weights
+                weights=predictions['class_weights']
             )
 
         return depths, depth_points, raw_depth_points, losses, gt_depths, gt_depth_points
