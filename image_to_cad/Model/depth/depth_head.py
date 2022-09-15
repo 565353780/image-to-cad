@@ -41,24 +41,24 @@ class DepthHead(nn.Module):
     def out_channels(self):
         return self.fpn_depth_features.out_channels
 
-    def forward(self, predictions):
+    def forward(self, inputs, predictions):
         if self.training:
-            assert predictions['image_depths'] is not None
+            assert inputs['image_depths'] is not None
 
         losses = {}
 
         if self.training:
-            mask = predictions['image_depths'] > 1e-5
+            mask = inputs['image_depths'] > 1e-5
             flt = mask.flatten(1).any(1)
 
             if not flt.any():
                 depth_features = torch.zeros(
-                    predictions['image_depths'].size(0),
+                    inputs['image_depths'].size(0),
                     self.fpn_depth_features.out_channels,
                     *self.fpn_depth_features.size,
-                    device=predictions['image_depths'].device
+                    device=inputs['image_depths'].device
                 )
-                depth_pred = torch.zeros_like(predictions['image_depths'])
+                depth_pred = torch.zeros_like(inputs['image_depths'])
                 predictions['depths'] = depth_pred
                 predictions['depth_features'] = depth_features
                 return predictions, losses
@@ -67,22 +67,21 @@ class DepthHead(nn.Module):
 
         depth_features = self.fpn_depth_features(features)
         depth_pred = self.fpn_depth_output(depth_features)
-
-        if self.training:
-            losses = self.loss(predictions)
-
         predictions['depths'] = depth_pred
         predictions['depth_features'] = depth_features
 
+        if self.training:
+            losses = self.loss(inputs, predictions)
+
         return predictions, losses
 
-    def loss(self, predictions):
+    def loss(self, inputs, predictions):
         losses = {}
 
-        if predictions['image_depths'] is None:
+        if inputs['image_depths'] is None:
             return losses
 
-        mask = predictions['image_depths'] > 1e-5
+        mask = inputs['image_depths'] > 1e-5
         flt = mask.flatten(1).any(1)
 
         if not flt.any():
@@ -98,7 +97,7 @@ class DepthHead(nn.Module):
 
         mask = mask[flt]
         depth_pred = predictions['depths'][flt] * mask
-        depth_gt = predictions['image_depths'][flt] * mask
+        depth_gt = inputs['image_depths'][flt] * mask
 
         # Directly compare the depths
         losses['loss_image_depth'] = inverse_huber_loss(
