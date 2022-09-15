@@ -68,17 +68,17 @@ class ROCAROIHeads(StandardROIHeads):
                 inputs['targets']
             )
         else:
-            predictions['label_and_sample_proposals'] = None
+            predictions['label_and_sample_proposals'] = predictions['proposals']
 
         predictions, box_losses = self.forward_box(predictions)
         losses.update(box_losses)
 
         if self.training:
             predictions['instances'] = predictions['label_and_sample_proposals']
-        if not self.training:
+        else:
             predictions['instances'] = predictions['box_instances']
 
-        predictions, depth_losses = self.depth_head(predictions)
+        predictions, depth_losses = self.depth_head(inputs, predictions)
         losses.update(depth_losses)
         extra_outputs['pred_image_depths'] = predictions['depths']
 
@@ -89,20 +89,23 @@ class ROCAROIHeads(StandardROIHeads):
         return pred_instances, extra_outputs, losses
 
     def forward_box(self, predictions):
-        self.box_predictor.set_class_weights(self.class_weights)
         losses = {}
+
+        self.box_predictor.set_class_weights(self.class_weights)
+
         pred_instances = None
         if self.training:
             losses = self._forward_box(
                 predictions['features'],
-                predictions['proposals']
+                predictions['label_and_sample_proposals']
             )
         else:
             pred_instances = self._forward_box(
                 predictions['features'],
-                predictions['proposals']
+                predictions['label_and_sample_proposals']
             )
-            predictions['box_instances'] = pred_instances
+
+        predictions['box_instances'] = pred_instances
         return predictions, losses
 
     def forward_alignment(self, inputs, predictions):
@@ -217,7 +220,12 @@ class ROCAROIHeads(StandardROIHeads):
         if not self.training:
             # Fill the instances
             for name, preds in predictions.items():
-                for instance, pred in zip(instances, preds.split(instance_sizes)):
+                pred_list = None
+                try:
+                    pred_list = preds.split(instance_sizes)
+                except:
+                    continue
+                for instance, pred in zip(instances, pred_list):
                     setattr(instance, name, pred)
         return instances, extra_outputs, losses
 
