@@ -112,106 +112,86 @@ class ROCAROIHeads(StandardROIHeads):
         losses = {}
         extra_outputs = {}
 
-        features = predictions['features']
-        instances = predictions['instances']
-        image_size = inputs['image_size']
-        depths = predictions['depths']
-        depth_features = predictions['depth_features']
         if self.training:
-            inference_args = None
+            inputs['inference_args'] = None
         else:
-            inference_args = inputs['targets']
-        gt_depths = predictions['depths']
-        scenes = inputs['scenes']
+            inputs['inference_args'] = inputs['targets']
 
         if self.training:
-            instances, _ = select_foreground_proposals(
-                instances, self.num_classes
+            predictions['alignment_instances'], _ = select_foreground_proposals(
+                predictions['instances'],
+                self.num_classes
             )
         else:
-            score_flt = [p.scores >= self.test_min_score for p in instances]
-            instances = [p[flt] for p, flt in zip(instances, score_flt)]
+            score_flt = [p.scores >= self.test_min_score for p in predictions['instances']]
+            predictions['alignment_instances'] = [p[flt] for p, flt in zip(predictions['instances'], score_flt)]
 
         pool_boxes = None
         if self.training:
-            pool_boxes = [x.proposal_boxes for x in instances]
+            pool_boxes = [x.proposal_boxes for x in predictions['alignment_instances']]
         else:
-            pool_boxes = [x.pred_boxes for x in instances]
+            pool_boxes = [x.pred_boxes for x in predictions['alignment_instances']]
+        predictions['pool_boxes'] = pool_boxes
 
-        features = [features[f] for f in self.in_features]
+        features = [predictions['features'][f] for f in self.in_features]
         features = self.mask_pooler(features, pool_boxes)
+        predictions['alignment_features'] = features
 
         gt_classes = None
         if self.training:
-            gt_classes = L.cat([p.gt_classes for p in instances])
+            gt_classes = L.cat([p.gt_classes for p in predictions['alignment_instances']])
 
         mask_classes = gt_classes
         if not self.training:
-            pred_classes = [x.pred_classes for x in instances]
+            pred_classes = [x.pred_classes for x in predictions['alignment_instances']]
             mask_classes = L.cat(pred_classes)
+        predictions['mask_classes'] = mask_classes
 
         class_weights = None
         if self.training:
             class_weights = self.class_weights[gt_classes + 1]
+        predictions['class_weights'] = class_weights
 
         # Create xy-grids for back-projection and cropping, respectively
         xy_grid, xy_grid_n = create_xy_grids(
             Boxes.cat(pool_boxes),
-            image_size,
-            features.size(0),
+            inputs['image_size'],
+            predictions['alignment_features'].size(0),
             self.output_grid_size
         )
+        predictions['xy_grid'] = xy_grid
+        predictions['xy_grid_n'] = xy_grid_n
 
-        mask_probs, mask_pred, mask_gt, mask_losses = self.forward_mask(
-            features,
-            mask_classes,
-            instances,
-            xy_grid_n,
-            class_weights
-        )
+        predictions, mask_losses = self.forward_mask(predictions)
         losses.update(mask_losses)
-        predictions['pred_masks'] = mask_probs
 
         alignment_classes = gt_classes
         if not self.training:
-            pred_classes = [x.pred_classes for x in instances]
+            pred_classes = [x.pred_classes for x in predictions['alignment_instances']]
             alignment_classes = L.cat(pred_classes)
+        predictions['alignment_classes'] = alignment_classes
 
-        alignment_predictions, alignment_losses = self.alignment_head(
-            instances,
-            depth_features,
-            depths,
-            image_size,
-            mask_probs,
-            mask_pred,
-            xy_grid,
-            xy_grid_n,
-            alignment_classes,
-            inference_args,
-            gt_depths,
-            class_weights,
-            mask_gt
-        )
+        alignment_predictions, alignment_losses = self.alignment_head(inputs, predictions)
         losses.update(alignment_losses)
         predictions.update(alignment_predictions)
 
-        instance_sizes = [len(x) for x in instances]
+        instance_sizes = [len(x) for x in predictions['alignment_instances']]
 
         pred_indices, cad_ids, retrieval_losses = self.retrieval_head(
-            alignment_classes,
-            mask_pred,
+            predictions['alignment_classes'],
+            predictions['mask_pred'],
             predictions['nocs'],
             predictions['shape_code'],
             instance_sizes,
             predictions['has_alignment'],
-            scenes,
-            instances,
+            inputs['scenes'],
+            predictions['alignment_instances'],
             predictions['pred_scales'],
             predictions['pred_translations'],
             predictions['pred_rotations'],
             predictions['depth_points'],
             predictions['raw_nocs'],
-            mask_pred
+            predictions['mask_pred']
         )
         losses.update(retrieval_losses)
         predictions['pred_indices'] = pred_indices
@@ -225,73 +205,58 @@ class ROCAROIHeads(StandardROIHeads):
                     pred_list = preds.split(instance_sizes)
                 except:
                     continue
-                for instance, pred in zip(instances, pred_list):
+                for instance, pred in zip(predictions['alignment_instances'], pred_list):
                     setattr(instance, name, pred)
-        return instances, extra_outputs, losses
+        return predictions['alignment_instances'], extra_outputs, losses
 
-    def forward_mask(
-        self,
-        features,
-        classes,
-        instances=None,
-        xy_grid_n=None,
-        class_weights=None
-    ):
+    def forward_mask(self, predictions):
         if self.training:
-            assert instances is not None
-            assert xy_grid_n is not None
+            assert predictions['alignment_instances'] is not None
+            assert predictions['xy_grid_n'] is not None
 
-        mask_logits = self.mask_head.layers(features)
-        mask_logits = select_classes(mask_logits, self.num_classes + 1, classes)
+        mask_logits = self.mask_head.layers(predictions['alignment_features'])
+        mask_logits = select_classes(mask_logits, self.num_classes + 1, predictions['mask_classes'])
+        predictions['mask_logits'] = mask_logits
 
-        mask_probs = torch.sigmoid(mask_logits)
+        predictions['mask_probs'] = torch.sigmoid(mask_logits)
 
-        mask_pred = None
         if self.training:
-            mask_pred = mask_probs > 0.5
+            predictions['mask_pred'] = predictions['mask_probs'] > 0.5
         else:
-            mask_pred = mask_probs > 0.7
+            predictions['mask_pred'] = predictions['mask_probs'] > 0.7
 
-        mask_gt = None
+        predictions['mask_gt'] = None
         if self.training:
-            mask_gt = Masks\
-                .cat([p.gt_masks for p in instances])\
-                .crop_and_resize_with_grid(xy_grid_n, self.output_grid_size)
+            predictions['mask_gt'] = Masks\
+                .cat([p.gt_masks for p in predictions['alignment_instances']])\
+                .crop_and_resize_with_grid(predictions['xy_grid_n'], self.output_grid_size)
 
-        losses = self.mask_loss(
-            mask_logits,
-            mask_probs,
-            mask_pred,
-            mask_gt,
-            class_weights)
+        losses = self.mask_loss(predictions)
 
-        mask_pred = mask_pred.to(mask_probs.dtype)
+        predictions['mask_pred'] = predictions['mask_pred'].to(predictions['mask_probs'].dtype)
 
-        return mask_probs, mask_pred, mask_gt, losses
+        return predictions, losses
 
-    def mask_loss(
-        self,
-        mask_logits,
-        mask_probs,
-        mask_pred,
-        mask_gt=None,
-        class_weights=None
-    ):
+    def mask_loss(self, predictions):
         losses = {}
 
-        if mask_gt is None:
+        if predictions['mask_gt'] is None:
             return losses
 
         losses['loss_mask'] = binary_cross_entropy_with_logits(
-            mask_logits, mask_gt, class_weights
+            predictions['mask_logits'],
+            predictions['mask_gt'],
+            predictions['class_weights']
         )
         losses['loss_mask_iou'] = mask_iou_loss(
-            mask_probs, mask_gt, class_weights
+            predictions['mask_probs'],
+            predictions['mask_gt'],
+            predictions['class_weights']
         )
 
         #FIXME: log this loss
         # Log the mask performance and then convert mask_pred to float
-        metric_dict = mask_metrics(mask_pred, mask_gt.bool())
+        metric_dict = mask_metrics(predictions['mask_pred'], predictions['mask_gt'].bool())
         print("[INFO][ROCAROIHeads::mask_loss]")
         print("\t mask metric is")
         print(metric_dict)
