@@ -171,18 +171,17 @@ class ROCAROIHeads(StandardROIHeads):
             alignment_classes = L.cat(pred_classes)
         predictions['alignment_classes'] = alignment_classes
 
-        alignment_predictions, alignment_losses = self.alignment_head(inputs, predictions)
-        losses.update(alignment_losses)
-        predictions.update(alignment_predictions)
+        predictions['alignment_instance_sizes'] = [len(x) for x in predictions['alignment_instances']]
 
-        instance_sizes = [len(x) for x in predictions['alignment_instances']]
+        predictions, alignment_losses = self.alignment_head(inputs, predictions)
+        losses.update(alignment_losses)
 
         pred_indices, cad_ids, retrieval_losses = self.retrieval_head(
             predictions['alignment_classes'],
             predictions['mask_pred'],
             predictions['nocs'],
             predictions['shape_code'],
-            instance_sizes,
+            predictions['alignment_instance_sizes'],
             predictions['has_alignment'],
             inputs['scenes'],
             predictions['alignment_instances'],
@@ -202,7 +201,7 @@ class ROCAROIHeads(StandardROIHeads):
             for name, preds in predictions.items():
                 pred_list = None
                 try:
-                    pred_list = preds.split(instance_sizes)
+                    pred_list = preds.split(predictions['alignment_instance_sizes'])
                 except:
                     continue
                 for instance, pred in zip(predictions['alignment_instances'], pred_list):
