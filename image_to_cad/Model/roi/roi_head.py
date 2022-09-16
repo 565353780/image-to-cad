@@ -187,7 +187,7 @@ class ROCAROIHeads(StandardROIHeads):
             predictions['alignment_instances'],
             predictions['scales_pred'],
             predictions['trans_pred'],
-            predictions['pred_rotations'],
+            predictions['rot_pred'],
             predictions['roi_mask_depth_points'],
             predictions['raw_nocs'],
             predictions['mask_pred']
