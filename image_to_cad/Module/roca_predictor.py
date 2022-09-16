@@ -120,7 +120,7 @@ class Predictor(object):
             trs = make_M_from_tqs(
                 instances.pred_translations[i].tolist(),
                 instances.pred_rotations[i].tolist(),
-                instances.pred_scales[i].tolist()
+                instances.scales_pred[i].tolist()
             )
             mesh.apply_transform(self.scene_rot @ trs)
 
