@@ -118,18 +118,8 @@ class AlignmentHead(nn.Module):
         predictions, scale_losses = self.forward_scale(predictions)
         losses.update(scale_losses)
 
-        trans_pred, trans_losses, trans_gt = self.forward_trans(
-            predictions['shape_code'],
-            predictions['roi_mask_depths'],
-            predictions['roi_mask_depth_points'],
-            predictions['alignment_classes'],
-            predictions['alignment_instances'],
-            predictions['roi_mask_gt_depth_points'],
-            predictions['roi_mask_gt_depths'],
-            predictions['class_weights']
-        )
+        predictions, trans_losses = self.forward_trans(predictions)
         losses.update(trans_losses)
-        predictions['pred_translations'] = trans_pred
 
         proc_depth_points = predictions['roi_depth_points'].clone()
         if self.training:
@@ -143,13 +133,13 @@ class AlignmentHead(nn.Module):
             predictions['shape_code'],
             proc_depth_points,
             predictions['mask_pred'],
-            trans_pred,
+            predictions['trans_pred'],
             predictions['scales_pred'],
             predictions['alignment_classes'],
             predictions['mask_probs'],
             predictions['roi_mask_gt_depth_points'],
             predictions['mask_gt'],
-            trans_gt,
+            predictions['trans_gt'],
             rot_gt,
             predictions['scales_gt'],
             predictions['class_weights']
@@ -173,8 +163,8 @@ class AlignmentHead(nn.Module):
 
         device = next(self.parameters()).device
         predictions = {
-            'pred_scales': Scales.new_empty(0, device).tensor,
-            'pred_translations': Translations.new_empty(0, device).tensor,
+            'scales_pred': Scales.new_empty(0, device).tensor,
+            'trans_pred': Translations.new_empty(0, device).tensor,
             'pred_rotations': Rotations.new_empty(0, device).tensor,
             'has_alignment': torch.zeros(0, device=device).bool(),
             'pred_indices': torch.zeros(0, device=device).long()
@@ -321,29 +311,20 @@ class AlignmentHead(nn.Module):
         )
         return depths, depth_points
 
-    def forward_trans(
-        self,
-        shape_code,
-        depths,
-        depth_points,
-        alignment_classes,
-        instances=None,
-        gt_depth_points=None,
-        gt_depths=None,
-        class_weights=None
-    ):
+    def forward_trans(self, predictions):
         if self.training:
-            assert instances is not None
-            assert gt_depth_points is not None
-            assert gt_depths is not None
+            assert predictions['alignment_instances'] is not None
+            assert predictions['roi_mask_gt_depth_points'] is not None
+            assert predictions['roi_mask_gt_depths'] is not None
 
         losses = {}
 
         depth_center, depth_min, depth_max = depth_bbox_center(
-            depth_points, depths
+            predictions['roi_mask_depth_points'],
+            predictions['roi_mask_depths']
         )
         trans_code = L.cat(
-            [(depth_max - depth_min).detach(), shape_code],
+            [(depth_max - depth_min).detach(), predictions['shape_code']],
             dim=-1
         )
         trans_offset = self.trans_head(trans_code)
@@ -352,33 +333,38 @@ class AlignmentHead(nn.Module):
         trans_offset = select_classes(
             trans_offset,
             self.num_classes,
-            alignment_classes
+            predictions['alignment_classes']
         )
 
-        trans = depth_center + trans_offset
+        predictions['trans_pred'] = depth_center + trans_offset
 
-        trans_gt = None
+        predictions['trans_gt'] = None
         if self.training:
-            depth_min_gt, depth_max_gt = depth_bbox(gt_depth_points, gt_depths)
+            depth_min_gt, depth_max_gt = depth_bbox(
+                predictions['roi_mask_gt_depth_points'],
+                predictions['roi_mask_gt_depths'])
+
             losses['loss_depth_min'] = smooth_l1_loss(
                 depth_min,
                 depth_min_gt,
-                weights=class_weights
+                weights=predictions['class_weights']
             )
+
             losses['loss_depth_max'] = smooth_l1_loss(
                 depth_max,
                 depth_max_gt,
-                weights=class_weights
+                weights=predictions['class_weights']
             )
 
-            trans_gt = Translations.cat([p.gt_translations for p in instances]).tensor
+            predictions['trans_gt'] = Translations.cat(
+                [p.gt_translations for p in predictions['alignment_instances']]).tensor
+
             losses['loss_trans'] = l2_loss(
-                trans,
-                trans_gt,
-                weights=class_weights
+                predictions['trans_pred'],
+                predictions['trans_gt'],
+                weights=predictions['class_weights']
             )
-
-        return trans, losses, trans_gt
+        return predictions, losses
 
     def _forward_proc(
         self,
