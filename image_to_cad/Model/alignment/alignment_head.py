@@ -99,25 +99,21 @@ class AlignmentHead(nn.Module):
 
         predictions = self.encode_shape(inputs, predictions)
 
-        intrinsics = None
         if self.training:
-            intrinsics = Intrinsics.cat(
+            predictions['intrinsics'] = Intrinsics.cat(
                 [p.gt_intrinsics for p in predictions['alignment_instances']]
             ).tensor.inverse()
         else:
-            intrinsics = Intrinsics.cat(
+            predictions['intrinsics'] = Intrinsics.cat(
                 [arg['intrinsics'] for arg in inputs['inference_args']]
             ).tensor.inverse()
-            if intrinsics.size(0) > 1:
-                intrinsics = intrinsics.repeat_interleave(
+            if predictions['intrinsics'].size(0) > 1:
+                predictions['intrinsics'] = predictions['intrinsics'].repeat_interleave(
                     predictions['alignment_sizes'], dim=0
                 )
-        predictions['intrinsics'] = intrinsics
 
-        depths, depth_points, raw_depth_points, depth_losses, gt_depths, gt_depth_points = \
-            self.forward_roi_depth(inputs, predictions)
+        predictions, depth_losses = self.forward_roi_depth(inputs, predictions)
         losses.update(depth_losses)
-        predictions['depth_points'] = depth_points
 
         scale_pred, scale_losses, scale_gt = self.forward_scale(
             predictions['shape_code'],
@@ -130,20 +126,20 @@ class AlignmentHead(nn.Module):
 
         trans_pred, trans_losses, trans_gt = self.forward_trans(
             predictions['shape_code'],
-            depths,
-            depth_points,
+            predictions['roi_mask_depths'],
+            predictions['roi_mask_depth_points'],
             predictions['alignment_classes'],
             predictions['alignment_instances'],
-            gt_depth_points,
-            gt_depths,
+            predictions['roi_mask_gt_depth_points'],
+            predictions['roi_mask_gt_depths'],
             predictions['class_weights']
         )
         losses.update(trans_losses)
         predictions['pred_translations'] = trans_pred
 
-        proc_depth_points = raw_depth_points
+        proc_depth_points = predictions['roi_depth_points'].clone()
         if self.training:
-            proc_depth_points = depth_points
+            proc_depth_points = predictions['roi_mask_depth_points']
 
         rot_gt = None
         if self.training:
@@ -157,7 +153,7 @@ class AlignmentHead(nn.Module):
             scale_pred,
             predictions['alignment_classes'],
             predictions['mask_probs'],
-            gt_depth_points,
+            predictions['roi_mask_gt_depth_points'],
             predictions['mask_gt'],
             trans_gt,
             rot_gt,
@@ -251,18 +247,18 @@ class AlignmentHead(nn.Module):
 
         losses = {}
 
-        depths, depth_points = self.crop_and_project_depth(
+        predictions['roi_depths'], predictions['roi_depth_points'] = self.crop_and_project_depth(
             predictions['xy_grid'],
             predictions['depths'],
             predictions['intrinsics'],
             predictions['xy_grid_n'],
-            predictions['alignment_sizes'],
+            predictions['alignment_sizes']
         )
 
-        gt_depths = None
-        gt_depth_points = None
+        predictions['roi_gt_depths'] = None
+        predictions['roi_gt_depth_points'] = None
         if self.training:
-            gt_depths, gt_depth_points = self.crop_and_project_depth(
+            predictions['roi_gt_depths'], predictions['roi_gt_depth_points'] = self.crop_and_project_depth(
                 predictions['xy_grid'],
                 inputs['image_depths'],
                 predictions['intrinsics'],
@@ -271,39 +267,47 @@ class AlignmentHead(nn.Module):
             )
 
             losses['loss_roi_depth'] = masked_l1_loss(
-                depths,
-                gt_depths,
+                predictions['roi_depths'],
+                predictions['roi_gt_depths'],
                 predictions['mask_gt'],
                 weights=predictions['class_weights']
             )
 
             #FIXME: log this loss
             # Log metrics to tensorboard
-            metric_dict = depth_metrics(depths, gt_depths, predictions['mask_gt'],
-                                        pref='depth/roi_')
+            metric_dict = depth_metrics(
+                predictions['roi_depths'],
+                predictions['roi_gt_depths'],
+                predictions['mask_gt'],
+                pref='depth/roi_'
+            )
             print("[INFO][AlignmentHead::forward_roi_depth]")
             print("\t depth_metrics")
             print(metric_dict)
 
-        raw_depth_points = depth_points.clone()
-        depths = depths * predictions['mask_pred']
-        depth_points = depth_points * predictions['mask_pred']
+        predictions['roi_mask_depths'] = predictions['roi_depths'] * predictions['mask_pred']
+        predictions['roi_mask_depth_points'] = predictions['roi_depth_points'] * predictions['mask_pred']
 
+        predictions['roi_mask_gt_depths'] = None
+        predictions['roi_mask_gt_depth_points'] = None
         if self.training:
-            gt_depths = gt_depths * predictions['mask_gt']
-            gt_depth_points = gt_depth_points * predictions['mask_gt']
+            predictions['roi_mask_gt_depths'] = predictions['roi_gt_depths'] * predictions['mask_gt']
+            predictions['roi_mask_gt_depth_points'] = predictions['roi_gt_depth_points'] * predictions['mask_gt']
 
             # Penalize depth means
             # TODO: make this loss optional
-            depth_mean_pred = point_mean(depths, point_count(predictions['mask_pred']))
-            depth_mean_gt = point_mean(gt_depths, point_count(predictions['mask_gt']))
+            predictions['roi_mask_depth_mean_pred'] = point_mean(
+                predictions['roi_mask_depths'],
+                point_count(predictions['mask_pred']))
+            predictions['roi_mask_depth_mean_gt'] = point_mean(
+                predictions['roi_mask_gt_depths'],
+                point_count(predictions['mask_gt']))
             losses['loss_mean_depth'] = l1_loss(
-                depth_mean_pred,
-                depth_mean_gt,
+                predictions['roi_mask_depth_mean_pred'],
+                predictions['roi_mask_depth_mean_gt'],
                 weights=predictions['class_weights']
             )
-
-        return depths, depth_points, raw_depth_points, losses, gt_depths, gt_depth_points
+        return predictions, losses
 
     def crop_and_project_depth(
         self,
