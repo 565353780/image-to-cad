@@ -106,7 +106,7 @@ class Predictor(object):
                 continue
 
             trans_cls_scores.append((
-                instances.pred_translations[i],
+                instances.trans_pred[i],
                 instances.pred_classes[i].item(),
                 instances.scores[i].item(),
             ))
@@ -118,7 +118,7 @@ class Predictor(object):
             )
 
             trs = make_M_from_tqs(
-                instances.pred_translations[i].tolist(),
+                instances.trans_pred[i].tolist(),
                 instances.pred_rotations[i].tolist(),
                 instances.scales_pred[i].tolist()
             )
