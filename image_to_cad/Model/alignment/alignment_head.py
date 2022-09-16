@@ -115,14 +115,8 @@ class AlignmentHead(nn.Module):
         predictions, depth_losses = self.forward_roi_depth(inputs, predictions)
         losses.update(depth_losses)
 
-        scale_pred, scale_losses, scale_gt = self.forward_scale(
-            predictions['shape_code'],
-            predictions['alignment_classes'],
-            predictions['alignment_instances'],
-            predictions['class_weights']
-        )
+        predictions, scale_losses = self.forward_scale(predictions)
         losses.update(scale_losses)
-        predictions['pred_scales'] = scale_pred
 
         trans_pred, trans_losses, trans_gt = self.forward_trans(
             predictions['shape_code'],
@@ -150,14 +144,14 @@ class AlignmentHead(nn.Module):
             proc_depth_points,
             predictions['mask_pred'],
             trans_pred,
-            scale_pred,
+            predictions['scales_pred'],
             predictions['alignment_classes'],
             predictions['mask_probs'],
             predictions['roi_mask_gt_depth_points'],
             predictions['mask_gt'],
             trans_gt,
             rot_gt,
-            scale_gt,
+            predictions['scales_gt'],
             predictions['class_weights']
         )
         losses.update(proc_losses)
@@ -211,34 +205,30 @@ class AlignmentHead(nn.Module):
         predictions['shape_code'] = shape_code
         return predictions
 
-    def forward_scale(
-        self,
-        shape_code,
-        alignment_classes,
-        instances=None,
-        class_weights=None
-    ):
+    def forward_scale(self, predictions):
         if self.training:
-            assert instances is not None
+            assert predictions['alignment_instances'] is not None
 
         losses = {}
 
         scales = select_classes(
-            self.scale_head(shape_code),
+            self.scale_head(predictions['shape_code']),
             self.num_classes,
-            alignment_classes
+            predictions['alignment_classes']
         )
+        predictions['scales_pred'] = scales
 
         gt_scales = None
         if self.training:
-            gt_scales = Scales.cat([p.gt_scales for p in instances]).tensor
+            gt_scales = Scales.cat([p.gt_scales for p in predictions['alignment_instances']]).tensor
             losses['loss_scale'] = l1_loss(
                 scales,
                 gt_scales,
-                weights=class_weights
+                weights=predictions['class_weights']
             )
+        predictions['scales_gt'] = gt_scales
 
-        return scales, losses, gt_scales
+        return predictions, losses
 
     def forward_roi_depth(self, inputs, predictions):
         if self.training:
