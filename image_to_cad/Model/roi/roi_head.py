@@ -176,23 +176,9 @@ class ROCAROIHeads(StandardROIHeads):
         predictions, alignment_losses = self.alignment_head(inputs, predictions)
         losses.update(alignment_losses)
 
-        pred_indices, cad_ids, retrieval_losses = self.retrieval_head(
-            predictions['alignment_classes'],
-            predictions['mask_pred'],
-            predictions['nocs'],
-            predictions['shape_code'],
-            predictions['alignment_instance_sizes'],
-            predictions['has_alignment'],
-            inputs['scenes'],
-            predictions['alignment_instances'],
-            predictions['scales_pred'],
-            predictions['trans_pred'],
-            predictions['rot_pred'],
-            predictions['roi_mask_depth_points'],
-            predictions['raw_nocs'],
-            predictions['mask_pred']
-        )
+        pred_indices, cad_ids, retrieval_losses = self.retrieval_head(inputs, predictions)
         losses.update(retrieval_losses)
+
         predictions['pred_indices'] = pred_indices
         extra_outputs['cad_ids'] = cad_ids
 
