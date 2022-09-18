@@ -82,10 +82,23 @@ class ROCAROIHeads(StandardROIHeads):
         losses.update(depth_losses)
         extra_outputs['pred_image_depths'] = predictions['depths']
 
-        predictions, alignment_outputs, alignment_losses = self.forward_alignment(inputs, predictions)
+        predictions, alignment_losses = self.forward_alignment(inputs, predictions)
         losses.update(alignment_losses)
-        extra_outputs.update(alignment_outputs)
 
+        predictions, retrieval_losses = self.retrieval_head(inputs, predictions)
+        losses.update(retrieval_losses)
+        extra_outputs['cad_ids'] = predictions['cad_ids']
+
+        if not self.training:
+            # Fill the instances
+            for name, preds in predictions.items():
+                pred_list = None
+                try:
+                    pred_list = preds.split(predictions['alignment_instance_sizes'])
+                except:
+                    continue
+                for instance, pred in zip(predictions['alignment_instances'], pred_list):
+                    setattr(instance, name, pred)
         return predictions['alignment_instances'], extra_outputs, losses
 
     def forward_box(self, predictions):
@@ -110,7 +123,6 @@ class ROCAROIHeads(StandardROIHeads):
 
     def forward_alignment(self, inputs, predictions):
         losses = {}
-        extra_outputs = {}
 
         if self.training:
             inputs['inference_args'] = None
@@ -175,23 +187,7 @@ class ROCAROIHeads(StandardROIHeads):
 
         predictions, alignment_losses = self.alignment_head(inputs, predictions)
         losses.update(alignment_losses)
-
-        predictions, retrieval_losses = self.retrieval_head(inputs, predictions)
-        losses.update(retrieval_losses)
-
-        extra_outputs['cad_ids'] = predictions['cad_ids']
-
-        if not self.training:
-            # Fill the instances
-            for name, preds in predictions.items():
-                pred_list = None
-                try:
-                    pred_list = preds.split(predictions['alignment_instance_sizes'])
-                except:
-                    continue
-                for instance, pred in zip(predictions['alignment_instances'], pred_list):
-                    setattr(instance, name, pred)
-        return predictions, extra_outputs, losses
+        return predictions, losses
 
     def forward_mask(self, predictions):
         if self.training:
