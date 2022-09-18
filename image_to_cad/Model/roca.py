@@ -19,6 +19,7 @@ from image_to_cad.Model.roi.roi_head import ROCAROIHeads
 class ROCA(nn.Module):
     def __init__(self, cfg):
         super().__init__()
+        self.device = torch.device("cuda")
 
         input_shape = ShapeSpec(channels=len(cfg.MODEL.PIXEL_MEAN))
 
@@ -37,10 +38,6 @@ class ROCA(nn.Module):
             self.pixel_mean.shape == self.pixel_std.shape
         ), f"{self.pixel_mean} and {self.pixel_std} have different shapes!"
         return
-
-    @property
-    def device(self):
-        return self.pixel_mean.device
 
     def preprocess_image(self, batched_inputs):
         images = [x["image"].to(self.device) for x in batched_inputs]
@@ -61,51 +58,18 @@ class ROCA(nn.Module):
             processed_results.append({"instances": r})
         return processed_results
 
-    def prepareData(self, data):
+    def forward_backbone(self, data):
         data['inputs']['images'] = self.preprocess_image(data['inputs']['batched_inputs'])
 
-        data['inputs']['image_size'] = data['inputs']['images'][0].shape[-2:]
+        data['predictions']['features'] = self.backbone(data['inputs']['images'].tensor)
+        return data
 
+    def forward_proposals(self, data):
         if self.training:
             data['inputs']['gt_instances'] = [
                 x['instances'].to(self.device) for x in data['inputs']['batched_inputs']]
         else:
             data['inputs']['gt_instances'] = None
-
-
-        if self.training:
-            data['inputs']['targets'] = data['inputs']['gt_instances']
-        else:
-            data['inputs']['targets'] = [
-                {'intrinsics': input['intrinsics'].to(self.device)}
-                for input in data['inputs']['batched_inputs']]
-
-        if self.training:
-            image_depths = []
-            for batched_input in data['inputs']['batched_inputs']:
-                image_depths.append(batched_input.pop('image_depth'))
-            data['inputs']['image_depths'] = torch.cat(image_depths, dim=0).to(self.device)
-        else:
-            data['inputs']['image_depths'] = None
-
-        if self.training:
-            data['inputs']['scenes'] = None
-        else:
-            data['inputs']['scenes'] = [batched_input['scene'] for batched_input in data['inputs']['batched_inputs']]
-        return data
-
-    def forward(self, batched_inputs):
-        data = {
-            'inputs': {},
-            'predictions': {},
-            'losses': {}
-        }
-
-        data['inputs']['batched_inputs'] = batched_inputs
-
-        data = self.prepareData(data)
-
-        data['predictions']['features'] = self.backbone(data['inputs']['images'].tensor)
 
         data['predictions']['proposals'], proposal_losses = self.proposal_generator(
             data['inputs']['images'],
@@ -113,11 +77,7 @@ class ROCA(nn.Module):
             data['inputs']['gt_instances']
         )
         data['losses'].update(proposal_losses)
-
-        data = self.roi_heads(data)
-
-        data = self.refineData(data)
-        return data['predictions']['post_results'], data['losses']
+        return data
 
     def refineData(self, data):
         if self.training:
@@ -141,6 +101,26 @@ class ROCA(nn.Module):
                 for result in data['predictions']['post_results']:
                     result['cad_ids'] = data['predictions']['cad_ids']
         return data
+
+    def forward(self, batched_inputs):
+        data = {
+            'inputs': {},
+            'predictions': {},
+            'losses': {}
+        }
+
+        data['inputs']['batched_inputs'] = batched_inputs
+
+        data = self.forward_backbone(data)
+
+        data = self.forward_proposals(data)
+
+        data['inputs']['image_size'] = data['inputs']['images'][0].shape[-2:]
+
+        data = self.roi_heads(data)
+
+        data = self.refineData(data)
+        return data['predictions']['post_results'], data['losses']
 
     def set_train_cads(self, points, ids):
         retrieval_head = self.roi_heads.retrieval_head
