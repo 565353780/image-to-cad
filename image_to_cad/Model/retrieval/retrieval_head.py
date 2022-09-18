@@ -170,73 +170,58 @@ class RetrievalHead(nn.Module):
                     predictions['trans_pred']
                 )
 
-        cad_ids, pred_indices = None, None
         if self.training or self.has_cads:
-            cad_ids, pred_indices, retrieval_losses = self.forward_retrieval(
-                predictions['alignment_classes'],
-                predictions['retrieval_masks'],
-                predictions['retrieval_noc_points'],
-                predictions['retrieval_shape_code'],
-                predictions['alignment_instance_sizes'],
-                predictions['has_alignment'],
-                inputs['scenes'],
-                predictions['retrieval_pos_cads'],
-                predictions['retrieval_neg_cads']
-            )
+            predictions, retrieval_losses = self.forward_retrieval(inputs, predictions)
             losses.update(retrieval_losses)
-        return pred_indices, cad_ids, losses
+        return predictions, losses
 
-    def forward_retrieval(
-        self,
-        classes=None,
-        masks=None,
-        noc_points=None,
-        shape_code= None,
-        instance_sizes=None,
-        has_alignment=None,
-        scenes=None,
-        pos_cads=None,
-        neg_cads=None
-    ):
+    def forward_retrieval(self, inputs, predictions):
         if self.training:
-            assert pos_cads is not None
-            assert neg_cads is not None
+            assert predictions['retrieval_pos_cads'] is not None
+            assert predictions['retrieval_neg_cads'] is not None
         else:
             assert self.has_cads, 'No registered CAD models!'
 
         losses = {}
-        cad_ids, pred_indices = None, None
 
         if self.training:
             noc_embed = self.embed_nocs(
-                shape_code=shape_code,
-                noc_points=noc_points,
-                mask=masks
+                shape_code=predictions['retrieval_shape_code'],
+                noc_points=predictions['retrieval_noc_points'],
+                mask=predictions['retrieval_masks']
             )
             if isinstance(noc_embed, tuple):  # Completion
                 noc_embed, noc_comp = noc_embed
                 losses['loss_noc_comp'] = self.comp_loss(
-                    noc_comp, pos_cads.to(dtype=noc_comp.dtype)
+                    noc_comp, predictions['retrieval_pos_cads'].to(dtype=noc_comp.dtype)
                 )
 
-            cad_embeds = self.embed_cads(torch.cat([pos_cads, neg_cads]))
+            cad_embeds = self.embed_cads(torch.cat([
+                predictions['retrieval_pos_cads'],
+                predictions['retrieval_neg_cads']
+            ]))
             pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
             losses['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
+
+            predictions['cad_ids'] = None
+            predictions['pred_indices'] = None
         else:
             scenes = list(chain(*(
                 [scene] * isize
-                for scene, isize in zip(scenes, instance_sizes)
+                for scene, isize in zip(inputs['scenes'], predictions['alignment_instance_sizes'])
             )))
 
             cad_ids, pred_indices = self._embedding_lookup(
-                has_alignment,
-                classes,
-                masks,
+                predictions['has_alignment'],
+                predictions['alignment_classes'],
+                predictions['retrieval_masks'],
                 scenes,
-                noc_points,
-                shape_code=shape_code
+                predictions['retrieval_noc_points'],
+                shape_code=predictions['retrieval_shape_code'],
             )
-        return cad_ids, pred_indices, losses
+            predictions['cad_ids'] = cad_ids
+            predictions['pred_indices'] = pred_indices
+        return predictions, losses
 
     def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
         # Assertions
