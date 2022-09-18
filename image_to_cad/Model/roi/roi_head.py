@@ -54,43 +54,32 @@ class ROCAROIHeads(StandardROIHeads):
         self.verbose = verbose
         return
 
-    def prepareData(self, inputs, predictions):
-        '''
-        need:
-            targets
-            image_depths
-            proposals
-
-        create:
-            label_and_sample_proposals
-        '''
+    def prepareData(self, data):
         if self.training:
-            assert inputs['targets']
-            assert inputs['image_depths'] is not None
+            assert data['inputs']['targets']
+            assert data['inputs']['image_depths'] is not None
 
         if self.training:
-            predictions['label_and_sample_proposals'] = self.label_and_sample_proposals(
-                predictions['proposals'],
-                inputs['targets']
+            data['predictions']['label_and_sample_proposals'] = self.label_and_sample_proposals(
+                data['predictions']['proposals'],
+                data['inputs']['targets']
             )
         else:
-            predictions['label_and_sample_proposals'] = predictions['proposals']
+            data['predictions']['label_and_sample_proposals'] = data['predictions']['proposals']
+        return data
 
-        return inputs, predictions
+    def forward(self, data):
+        data = self.prepareData(data)
 
-    def forward(self, inputs, predictions):
-        losses = {}
+        inputs = data['inputs']
+        predictions = data['predictions']
+        losses = data['losses']
 
-        inputs, predictions = self.prepareData(inputs, predictions)
+        data = self.forward_box(data)
 
-        predictions, box_losses = self.forward_box(predictions)
-        losses.update(box_losses)
+        data = self.depth_head(data)
 
-        predictions, depth_losses = self.depth_head(inputs, predictions)
-        losses.update(depth_losses)
-
-        predictions, alignment_losses = self.forward_alignment(inputs, predictions)
-        losses.update(alignment_losses)
+        data = self.forward_alignment(data)
 
         predictions, retrieval_losses = self.retrieval_head(inputs, predictions)
         losses.update(retrieval_losses)
@@ -105,145 +94,155 @@ class ROCAROIHeads(StandardROIHeads):
                     continue
                 for instance, pred in zip(predictions['alignment_instances'], pred_list):
                     setattr(instance, name, pred)
-        return predictions, losses
 
-    def forward_box(self, predictions):
-        losses = {}
+        data['inputs'] = inputs
+        data['predictions'] = predictions
+        data['losses'] = losses
+        return data
 
+    def forward_box(self, data):
         self.box_predictor.set_class_weights(self.class_weights)
 
         if self.training:
-            losses = self._forward_box(
-                predictions['features'],
-                predictions['label_and_sample_proposals']
+            box_losses = self._forward_box(
+                data['predictions']['features'],
+                data['predictions']['label_and_sample_proposals']
             )
-            predictions['instances'] = predictions['label_and_sample_proposals']
+            data['losses'].update(box_losses)
+            data['predictions']['instances'] = data['predictions']['label_and_sample_proposals']
         else:
-            predictions['instances'] = self._forward_box(
-                predictions['features'],
-                predictions['label_and_sample_proposals']
+            data['predictions']['instances'] = self._forward_box(
+                data['predictions']['features'],
+                data['predictions']['label_and_sample_proposals']
             )
-        return predictions, losses
+        return data
 
-    def forward_alignment(self, inputs, predictions):
-        losses = {}
+    def forward_alignment(self, data):
+        if self.training:
+            data['inputs']['inference_args'] = None
+        else:
+            data['inputs']['inference_args'] = data['inputs']['targets']
 
         if self.training:
-            inputs['inference_args'] = None
-        else:
-            inputs['inference_args'] = inputs['targets']
-
-        if self.training:
-            predictions['alignment_instances'], _ = select_foreground_proposals(
-                predictions['instances'],
+            data['predictions']['alignment_instances'], _ = select_foreground_proposals(
+                data['predictions']['instances'],
                 self.num_classes
             )
         else:
-            score_flt = [p.scores >= self.test_min_score for p in predictions['instances']]
-            predictions['alignment_instances'] = [p[flt] for p, flt in zip(predictions['instances'], score_flt)]
+            score_flt = [p.scores >= self.test_min_score for p in data['predictions']['instances']]
+            data['predictions']['alignment_instances'] = \
+                [p[flt] for p, flt in zip(data['predictions']['instances'], score_flt)]
 
-        pool_boxes = None
         if self.training:
-            pool_boxes = [x.proposal_boxes for x in predictions['alignment_instances']]
+            data['predictions']['pool_boxes'] = \
+                [x.proposal_boxes for x in data['predictions']['alignment_instances']]
         else:
-            pool_boxes = [x.pred_boxes for x in predictions['alignment_instances']]
-        predictions['pool_boxes'] = pool_boxes
+            data['predictions']['pool_boxes'] = \
+                [x.pred_boxes for x in data['predictions']['alignment_instances']]
 
-        features = [predictions['features'][f] for f in self.in_features]
-        features = self.mask_pooler(features, pool_boxes)
-        predictions['alignment_features'] = features
+        features = [data['predictions']['features'][f] for f in self.in_features]
+        data['predictions']['alignment_features'] = self.mask_pooler(
+            features,
+            data['predictions']['pool_boxes']
+        )
 
-        gt_classes = None
         if self.training:
-            gt_classes = L.cat([p.gt_classes for p in predictions['alignment_instances']])
+            data['predictions']['gt_classes'] = \
+                L.cat([p.gt_classes for p in data['predictions']['alignment_instances']])
+        else:
+            data['predictions']['gt_classes'] = None
 
-        mask_classes = gt_classes
-        if not self.training:
-            pred_classes = [x.pred_classes for x in predictions['alignment_instances']]
-            mask_classes = L.cat(pred_classes)
-        predictions['mask_classes'] = mask_classes
-
-        class_weights = None
         if self.training:
-            class_weights = self.class_weights[gt_classes + 1]
-        predictions['class_weights'] = class_weights
+            data['predictions']['mask_classes'] = data['predictions']['gt_classes']
+        else:
+            pred_classes = [x.pred_classes for x in data['predictions']['alignment_instances']]
+            data['predictions']['mask_classes'] = L.cat(pred_classes)
+
+        if self.training:
+            data['predictions']['class_weights'] = self.class_weights[
+                data['predictions']['gt_classes'] + 1]
+        else:
+            data['predictions']['class_weights'] = None
 
         # Create xy-grids for back-projection and cropping, respectively
-        xy_grid, xy_grid_n = create_xy_grids(
-            Boxes.cat(pool_boxes),
-            inputs['image_size'],
-            predictions['alignment_features'].size(0),
+        data['predictions']['xy_grid'], data['predictions']['xy_grid_n'] = create_xy_grids(
+            Boxes.cat(data['predictions']['pool_boxes']),
+            data['inputs']['image_size'],
+            data['predictions']['alignment_features'].size(0),
             self.output_grid_size
         )
-        predictions['xy_grid'] = xy_grid
-        predictions['xy_grid_n'] = xy_grid_n
 
-        predictions, mask_losses = self.forward_mask(predictions)
-        losses.update(mask_losses)
-
-        alignment_classes = gt_classes
-        if not self.training:
-            pred_classes = [x.pred_classes for x in predictions['alignment_instances']]
-            alignment_classes = L.cat(pred_classes)
-        predictions['alignment_classes'] = alignment_classes
-
-        predictions['alignment_instance_sizes'] = [len(x) for x in predictions['alignment_instances']]
-
-        predictions, alignment_losses = self.alignment_head(inputs, predictions)
-        losses.update(alignment_losses)
-        return predictions, losses
-
-    def forward_mask(self, predictions):
-        if self.training:
-            assert predictions['alignment_instances'] is not None
-            assert predictions['xy_grid_n'] is not None
-
-        mask_logits = self.mask_head.layers(predictions['alignment_features'])
-        mask_logits = select_classes(mask_logits, self.num_classes + 1, predictions['mask_classes'])
-        predictions['mask_logits'] = mask_logits
-
-        predictions['mask_probs'] = torch.sigmoid(mask_logits)
+        data = self.forward_mask(data)
 
         if self.training:
-            predictions['mask_pred'] = predictions['mask_probs'] > 0.5
+            data['predictions']['alignment_classes'] = data['predictions']['gt_classes']
         else:
-            predictions['mask_pred'] = predictions['mask_probs'] > 0.7
+            pred_classes = [x.pred_classes for x in data['predictions']['alignment_instances']]
+            data['predictions']['alignment_classes'] = L.cat(pred_classes)
 
-        predictions['mask_gt'] = None
+        data['predictions']['alignment_instance_sizes'] = \
+            [len(x) for x in data['predictions']['alignment_instances']]
+
+        data['predictions'], alignment_losses = self.alignment_head(data['inputs'], data['predictions'])
+        data['losses'].update(alignment_losses)
+        return data
+
+    def forward_mask(self, data):
         if self.training:
-            predictions['mask_gt'] = Masks\
-                .cat([p.gt_masks for p in predictions['alignment_instances']])\
-                .crop_and_resize_with_grid(predictions['xy_grid_n'], self.output_grid_size)
+            assert data['predictions']['alignment_instances'] is not None
+            assert data['predictions']['xy_grid_n'] is not None
 
-        losses = self.mask_loss(predictions)
-
-        predictions['mask_pred'] = predictions['mask_pred'].to(predictions['mask_probs'].dtype)
-
-        return predictions, losses
-
-    def mask_loss(self, predictions):
-        losses = {}
-
-        if predictions['mask_gt'] is None:
-            return losses
-
-        losses['loss_mask'] = binary_cross_entropy_with_logits(
-            predictions['mask_logits'],
-            predictions['mask_gt'],
-            predictions['class_weights']
+        mask_logits = self.mask_head.layers(data['predictions']['alignment_features'])
+        data['predictions']['mask_logits'] = select_classes(
+            mask_logits,
+            self.num_classes + 1,
+            data['predictions']['mask_classes']
         )
-        losses['loss_mask_iou'] = mask_iou_loss(
-            predictions['mask_probs'],
-            predictions['mask_gt'],
-            predictions['class_weights']
+
+        data['predictions']['mask_probs'] = torch.sigmoid(data['predictions']['mask_logits'])
+
+        if self.training:
+            data['predictions']['mask_pred'] = data['predictions']['mask_probs'] > 0.5
+        else:
+            data['predictions']['mask_pred'] = data['predictions']['mask_probs'] > 0.7
+
+        if self.training:
+            data['predictions']['mask_gt'] = Masks\
+                .cat([p.gt_masks for p in data['predictions']['alignment_instances']])\
+                .crop_and_resize_with_grid(data['predictions']['xy_grid_n'], self.output_grid_size)
+        else:
+            data['predictions']['mask_gt'] = None
+
+        if self.training:
+            data = self.mask_loss(data)
+
+        data['predictions']['mask_pred'] = data['predictions']['mask_pred'].to(
+            data['predictions']['mask_probs'].dtype)
+
+        return data
+
+    def mask_loss(self, data):
+        if data['predictions']['mask_gt'] is None:
+            print("[WARN][ROCAROIHead::mask_loss]")
+            print("\t data['predictions']['mask_gt'] not exist!")
+            return data
+
+        data['losses']['loss_mask'] = binary_cross_entropy_with_logits(
+            data['predictions']['mask_logits'],
+            data['predictions']['mask_gt'],
+            data['predictions']['class_weights']
+        )
+        data['losses']['loss_mask_iou'] = mask_iou_loss(
+            data['predictions']['mask_probs'],
+            data['predictions']['mask_gt'],
+            data['predictions']['class_weights']
         )
 
         #FIXME: log this loss
         # Log the mask performance and then convert mask_pred to float
-        metric_dict = mask_metrics(predictions['mask_pred'], predictions['mask_gt'].bool())
-        print("[INFO][ROCAROIHeads::mask_loss]")
-        print("\t mask metric is")
-        print(metric_dict)
-
-        return losses
+        #  metric_dict = mask_metrics(
+            #  data['predictions']['mask_pred'],
+            #  data['predictions']['mask_gt'].bool()
+        #  )
+        return data
 
