@@ -41,66 +41,63 @@ class DepthHead(nn.Module):
     def out_channels(self):
         return self.fpn_depth_features.out_channels
 
-    def forward(self, inputs, predictions):
+    def forward(self, data):
         if self.training:
-            assert inputs['image_depths'] is not None
-
-        losses = {}
+            assert data['inputs']['image_depths'] is not None
 
         if self.training:
-            mask = inputs['image_depths'] > 1e-5
+            mask = data['inputs']['image_depths'] > 1e-5
             flt = mask.flatten(1).any(1)
 
             if not flt.any():
                 depth_features = torch.zeros(
-                    inputs['image_depths'].size(0),
+                    data['inputs']['image_depths'].size(0),
                     self.fpn_depth_features.out_channels,
                     *self.fpn_depth_features.size,
-                    device=inputs['image_depths'].device
+                    device=data['inputs']['image_depths'].device
                 )
-                depth_pred = torch.zeros_like(inputs['image_depths'])
-                predictions['depths'] = depth_pred
-                predictions['depth_features'] = depth_features
-                return predictions, losses
+                depth_pred = torch.zeros_like(data['inputs']['image_depths'])
+                data['predictions']['depths'] = depth_pred
+                data['predictions']['depth_features'] = depth_features
+                return data
 
-        features = [predictions['features'][f] for f in self.in_features]
+        features = [data['predictions']['features'][f] for f in self.in_features]
 
         depth_features = self.fpn_depth_features(features)
         depth_pred = self.fpn_depth_output(depth_features)
-        predictions['depths'] = depth_pred
-        predictions['depth_features'] = depth_features
+        data['predictions']['depths'] = depth_pred
+        data['predictions']['depth_features'] = depth_features
 
         if self.training:
-            losses = self.loss(inputs, predictions)
+            data = self.loss(data)
+        return data
 
-        return predictions, losses
+    def loss(self, data):
+        if data['inputs']['image_depths'] is None:
+            print("[WARN][DepthHead::loss]")
+            print("\t data['inputs']['image_depths'] not exist!")
+            return data
 
-    def loss(self, inputs, predictions):
-        losses = {}
-
-        if inputs['image_depths'] is None:
-            return losses
-
-        mask = inputs['image_depths'] > 1e-5
+        mask = data['inputs']['image_depths'] > 1e-5
         flt = mask.flatten(1).any(1)
 
         if not flt.any():
             zero_loss = torch.tensor(0.0, device=mask.device)
-            losses['loss_image_depth'] = zero_loss
+            data['losses']['loss_image_depth'] = zero_loss
             if self.use_grad_losses:
-                losses.update({
+                data['losses'].update({
                     'loss_grad_x': zero_loss.clone(),
                     'loss_grad_y': zero_loss.clone(),
                     'loss_normal': zero_loss.clone()
                 })
-            return losses
+            return data
 
         mask = mask[flt]
-        depth_pred = predictions['depths'][flt] * mask
-        depth_gt = inputs['image_depths'][flt] * mask
+        depth_pred = data['predictions']['depths'][flt] * mask
+        depth_gt = data['inputs']['image_depths'][flt] * mask
 
         # Directly compare the depths
-        losses['loss_image_depth'] = inverse_huber_loss(
+        data['losses']['loss_image_depth'] = inverse_huber_loss(
             depth_pred, depth_gt,
             mask, mask_inputs=False,
             instance_average=self.use_batch_average)
@@ -109,10 +106,10 @@ class DepthHead(nn.Module):
         if self.use_grad_losses:
             gradx_pred, grady_pred = self.sobel(depth_pred).chunk(2, dim=1)
             gradx_gt, grady_gt = self.sobel(depth_gt).chunk(2, dim=1)
-            losses['loss_grad_x'] = inverse_huber_loss(
+            data['losses']['loss_grad_x'] = inverse_huber_loss(
                 gradx_pred, gradx_gt,
                 mask, mask_inputs=False)
-            losses['loss_grad_y'] = inverse_huber_loss(
+            data['losses']['loss_grad_y'] = inverse_huber_loss(
                 grady_pred, grady_gt,
                 mask, mask_inputs=False)
 
@@ -121,13 +118,13 @@ class DepthHead(nn.Module):
             ones = torch.ones_like(gradx_pred)
             normal_pred = torch.cat([-gradx_pred, -grady_pred, ones], 1)
             normal_gt = torch.cat([-gradx_gt, -grady_gt, ones], 1)
-            losses['loss_normal'] = 5 * cosine_distance(
+            data['losses']['loss_normal'] = 5 * cosine_distance(
                 normal_pred, normal_gt, mask)
 
-        # Log depth metrics to tensorboard
+        #FIXME: Log depth metrics to tensorboard
         #  metric_dict = depth_metrics(
             #  depth_pred, depth_gt,
             #  mask, mask_inputs=False,
             #  pref='depth/image_')
-        return losses
+        return data
 
