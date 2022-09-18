@@ -82,11 +82,11 @@ class ROCAROIHeads(StandardROIHeads):
         losses.update(depth_losses)
         extra_outputs['pred_image_depths'] = predictions['depths']
 
-        pred_instances, alignment_outputs, alignment_losses = self.forward_alignment(inputs, predictions)
+        predictions, alignment_outputs, alignment_losses = self.forward_alignment(inputs, predictions)
         losses.update(alignment_losses)
         extra_outputs.update(alignment_outputs)
 
-        return pred_instances, extra_outputs, losses
+        return predictions['alignment_instances'], extra_outputs, losses
 
     def forward_box(self, predictions):
         losses = {}
@@ -176,11 +176,10 @@ class ROCAROIHeads(StandardROIHeads):
         predictions, alignment_losses = self.alignment_head(inputs, predictions)
         losses.update(alignment_losses)
 
-        pred_indices, cad_ids, retrieval_losses = self.retrieval_head(inputs, predictions)
+        predictions, retrieval_losses = self.retrieval_head(inputs, predictions)
         losses.update(retrieval_losses)
 
-        predictions['pred_indices'] = pred_indices
-        extra_outputs['cad_ids'] = cad_ids
+        extra_outputs['cad_ids'] = predictions['cad_ids']
 
         if not self.training:
             # Fill the instances
@@ -192,7 +191,7 @@ class ROCAROIHeads(StandardROIHeads):
                     continue
                 for instance, pred in zip(predictions['alignment_instances'], pred_list):
                     setattr(instance, name, pred)
-        return predictions['alignment_instances'], extra_outputs, losses
+        return predictions, extra_outputs, losses
 
     def forward_mask(self, predictions):
         if self.training:
