@@ -25,6 +25,8 @@ from image_to_cad.Method.common_ops import create_xy_grids, select_classes
 class ROCAROIHeads(StandardROIHeads):
     def __init__(self, cfg, input_shape):
         super().__init__(cfg, input_shape)
+        self.device = torch.device("cuda")
+
         self.set_verbose(False)
 
         self.init_class_weights(cfg)
@@ -54,53 +56,17 @@ class ROCAROIHeads(StandardROIHeads):
         self.verbose = verbose
         return
 
-    def prepareData(self, data):
-        if self.training:
-            assert data['inputs']['targets']
-            assert data['inputs']['image_depths'] is not None
-
-        if self.training:
-            data['predictions']['label_and_sample_proposals'] = self.label_and_sample_proposals(
-                data['predictions']['proposals'],
-                data['inputs']['targets']
-            )
-        else:
-            data['predictions']['label_and_sample_proposals'] = data['predictions']['proposals']
-        return data
-
-    def forward(self, data):
-        data = self.prepareData(data)
-
-        data = self.forward_box(data)
-
-        data = self.depth_head(data)
-
-        data = self.forward_alignment(data)
-
-        data = self.retrieval_head(data)
-
-        if not self.training:
-            # Fill the instances
-            for name, preds in data['predictions'].items():
-                pred_list = None
-                try:
-                    pred_list = preds.split(data['predictions']['alignment_instance_sizes'])
-                except:
-                    continue
-                for instance, pred in zip(data['predictions']['alignment_instances'], pred_list):
-                    setattr(instance, name, pred)
-        return data
-
     def forward_box(self, data):
         self.box_predictor.set_class_weights(self.class_weights)
 
         if self.training:
+            data['predictions']['instances'] = data['predictions']['label_and_sample_proposals']
+
             box_losses = self._forward_box(
                 data['predictions']['features'],
                 data['predictions']['label_and_sample_proposals']
             )
             data['losses'].update(box_losses)
-            data['predictions']['instances'] = data['predictions']['label_and_sample_proposals']
         else:
             data['predictions']['instances'] = self._forward_box(
                 data['predictions']['features'],
@@ -175,6 +141,61 @@ class ROCAROIHeads(StandardROIHeads):
             [len(x) for x in data['predictions']['alignment_instances']]
 
         data = self.alignment_head(data)
+        return data
+
+    def forward(self, data):
+        if self.training:
+            data['inputs']['targets'] = data['inputs']['gt_instances']
+        else:
+            data['inputs']['targets'] = [
+                {'intrinsics': input['intrinsics'].to(self.device)}
+                for input in data['inputs']['batched_inputs']]
+
+        if self.training:
+            image_depths = []
+            for batched_input in data['inputs']['batched_inputs']:
+                image_depths.append(batched_input.pop('image_depth'))
+            data['inputs']['image_depths'] = torch.cat(image_depths, dim=0).to(self.device)
+        else:
+            data['inputs']['image_depths'] = None
+
+        if self.training:
+            data['inputs']['scenes'] = None
+        else:
+            data['inputs']['scenes'] = [batched_input['scene'] for batched_input in data['inputs']['batched_inputs']]
+
+        #==============================
+        #  data = self.prepareData(data)
+        if self.training:
+            assert data['inputs']['targets']
+            assert data['inputs']['image_depths'] is not None
+
+        if self.training:
+            data['predictions']['label_and_sample_proposals'] = self.label_and_sample_proposals(
+                data['predictions']['proposals'],
+                data['inputs']['targets']
+            )
+        else:
+            data['predictions']['label_and_sample_proposals'] = data['predictions']['proposals']
+
+        data = self.forward_box(data)
+
+        data = self.depth_head(data)
+
+        data = self.forward_alignment(data)
+
+        data = self.retrieval_head(data)
+
+        if not self.training:
+            # Fill the instances
+            for name, preds in data['predictions'].items():
+                pred_list = None
+                try:
+                    pred_list = preds.split(data['predictions']['alignment_instance_sizes'])
+                except:
+                    continue
+                for instance, pred in zip(data['predictions']['alignment_instances'], pred_list):
+                    setattr(instance, name, pred)
         return data
 
     def forward_mask(self, data):
