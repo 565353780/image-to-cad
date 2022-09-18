@@ -54,12 +54,19 @@ class ROCAROIHeads(StandardROIHeads):
         self.verbose = verbose
         return
 
-    def forward(self, inputs, predictions):
+    def prepareData(self, inputs, predictions):
+        '''
+        need:
+            targets
+            image_depths
+            proposals
+
+        create:
+            label_and_sample_proposals
+        '''
         if self.training:
             assert inputs['targets']
             assert inputs['image_depths'] is not None
-
-        losses = {}
 
         if self.training:
             predictions['label_and_sample_proposals'] = self.label_and_sample_proposals(
@@ -69,13 +76,15 @@ class ROCAROIHeads(StandardROIHeads):
         else:
             predictions['label_and_sample_proposals'] = predictions['proposals']
 
+        return inputs, predictions
+
+    def forward(self, inputs, predictions):
+        losses = {}
+
+        inputs, predictions = self.prepareData(inputs, predictions)
+
         predictions, box_losses = self.forward_box(predictions)
         losses.update(box_losses)
-
-        if self.training:
-            predictions['instances'] = predictions['label_and_sample_proposals']
-        else:
-            predictions['instances'] = predictions['box_instances']
 
         predictions, depth_losses = self.depth_head(inputs, predictions)
         losses.update(depth_losses)
@@ -103,19 +112,17 @@ class ROCAROIHeads(StandardROIHeads):
 
         self.box_predictor.set_class_weights(self.class_weights)
 
-        pred_instances = None
         if self.training:
             losses = self._forward_box(
                 predictions['features'],
                 predictions['label_and_sample_proposals']
             )
+            predictions['instances'] = predictions['label_and_sample_proposals']
         else:
-            pred_instances = self._forward_box(
+            predictions['instances'] = self._forward_box(
                 predictions['features'],
                 predictions['label_and_sample_proposals']
             )
-
-        predictions['box_instances'] = pred_instances
         return predictions, losses
 
     def forward_alignment(self, inputs, predictions):
