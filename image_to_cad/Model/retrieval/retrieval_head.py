@@ -127,57 +127,80 @@ class RetrievalHead(nn.Module):
         return
 
     def forward(self, data):
-        if not self.training and self.has_cads:
-            assert data['inputs']['scenes'] is not None
+        if not self.training and not self.has_cads:
+            print("[WARN][RetrievalHead::forward]")
+            print("\t self.has_cads is False!")
+            return data
 
         if self.training:
             pos_cads = L.cat([p.gt_pos_cads for p in data['predictions']['alignment_instances']])
             neg_cads = L.cat([p.gt_neg_cads for p in data['predictions']['alignment_instances']])
             # TODO: make this configurable
             sample = torch.randperm(pos_cads.size(0))[:32]
-            data['predictions']['retrieval_pos_cads'] = pos_cads[sample]
-            data['predictions']['retrieval_neg_cads'] = neg_cads[sample]
-        else:
-            data['predictions']['retrieval_pos_cads'] = None
-            data['predictions']['retrieval_neg_cads'] = None
 
         if self.training:
             data['predictions']['retrieval_masks'] = data['predictions']['mask_pred'][sample]
+            data['predictions']['retrieval_shape_code'] = data['predictions']['shape_code'][sample]
+            data['predictions']['retrieval_noc_points'] = data['predictions']['nocs'][sample]
         else:
             data['predictions']['retrieval_masks'] = data['predictions']['mask_pred']
-
-        if self.training:
-            data['predictions']['retrieval_shape_code'] = data['predictions']['shape_code'][sample]
-        else:
             data['predictions']['retrieval_shape_code'] = data['predictions']['shape_code']
 
-        if self.training:
-            data['predictions']['retrieval_noc_points'] = data['predictions']['nocs'][sample]
-        elif self.has_cads:
-            if data['predictions']['raw_nocs'] is not None:
-                data['predictions']['retrieval_noc_points'] = data['predictions']['raw_nocs']
-            else:
-                rotation_mats = Rotations(data['predictions']['rot_pred'])\
-                    .as_rotation_matrices()\
-                    .mats
-                data['predictions']['retrieval_noc_points'] = inverse_transform(
-                    data['predictions']['roi_mask_depth_points'],
-                    data['predictions']['mask_pred'],
-                    data['predictions']['scales_pred'],
-                    rotation_mats,
-                    data['predictions']['trans_pred']
-                )
+            if self.has_cads:
+                if data['predictions']['raw_nocs'] is not None:
+                    # Keep all foreground NOCs!
+                    data['predictions']['raw_nocs'] *= (data['predictions']['mask_probs'] > 0.5)
+                    data['predictions']['retrieval_noc_points'] = data['predictions']['raw_nocs']
+                else:
+                    rotation_mats = Rotations(data['predictions']['rot_pred'])\
+                        .as_rotation_matrices()\
+                        .mats
+                    data['predictions']['retrieval_noc_points'] = inverse_transform(
+                        data['predictions']['roi_mask_depth_points'],
+                        data['predictions']['mask_pred'],
+                        data['predictions']['scales_pred'],
+                        rotation_mats,
+                        data['predictions']['trans_pred']
+                    )
 
-        if self.training or self.has_cads:
-            data = self.forward_retrieval(data)
-        return data
-
-    def forward_retrieval(self, data):
         if self.training:
+            data['inputs']['scenes'] = None
+        else:
+            data['inputs']['scenes'] = [batched_input['scene'] for batched_input in data['inputs']['batched_inputs']]
+            if self.has_cads:
+                assert data['inputs']['scenes'] is not None
+
+        num_instances = sum(data['predictions']['alignment_instance_sizes'])
+        data['predictions']['has_alignment'] = torch.ones(num_instances, dtype=torch.bool)
+
+        if self.training:
+            data['predictions']['cad_ids'] = None
+            data['predictions']['pred_indices'] = None
+        else:
+            scenes = list(chain(*(
+                [scene] * isize
+                for scene, isize in zip(data['inputs']['scenes'], data['predictions']['alignment_instance_sizes'])
+            )))
+
+            cad_ids, pred_indices = self._embedding_lookup(
+                data['predictions']['has_alignment'],
+                data['predictions']['alignment_classes'],
+                data['predictions']['retrieval_masks'],
+                scenes,
+                data['predictions']['retrieval_noc_points'],
+                shape_code=data['predictions']['retrieval_shape_code'],
+            )
+            data['predictions']['cad_ids'] = cad_ids
+            data['predictions']['pred_indices'] = pred_indices
+
+        if self.training:
+            data['predictions']['retrieval_pos_cads'] = pos_cads[sample]
+            data['predictions']['retrieval_neg_cads'] = neg_cads[sample]
             assert data['predictions']['retrieval_pos_cads'] is not None
             assert data['predictions']['retrieval_neg_cads'] is not None
         else:
-            assert self.has_cads, 'No registered CAD models!'
+            data['predictions']['retrieval_pos_cads'] = None
+            data['predictions']['retrieval_neg_cads'] = None
 
         if self.training:
             noc_embed = self.embed_nocs(
@@ -197,25 +220,6 @@ class RetrievalHead(nn.Module):
             ]))
             pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
             data['losses']['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
-
-            data['predictions']['cad_ids'] = None
-            data['predictions']['pred_indices'] = None
-        else:
-            scenes = list(chain(*(
-                [scene] * isize
-                for scene, isize in zip(data['inputs']['scenes'], data['predictions']['alignment_instance_sizes'])
-            )))
-
-            cad_ids, pred_indices = self._embedding_lookup(
-                data['predictions']['has_alignment'],
-                data['predictions']['alignment_classes'],
-                data['predictions']['retrieval_masks'],
-                scenes,
-                data['predictions']['retrieval_noc_points'],
-                shape_code=data['predictions']['retrieval_shape_code'],
-            )
-            data['predictions']['cad_ids'] = cad_ids
-            data['predictions']['pred_indices'] = pred_indices
         return data
 
     def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
