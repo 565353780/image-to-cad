@@ -115,8 +115,6 @@ class ROCA(nn.Module):
 
         data = self.forward_proposals(data)
 
-        data['inputs']['image_size'] = data['inputs']['images'][0].shape[-2:]
-
         data = self.roi_heads(data)
 
         data = self.refineData(data)
