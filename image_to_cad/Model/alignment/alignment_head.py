@@ -29,6 +29,7 @@ from image_to_cad.Method.alignment_ops import \
 class AlignmentHead(nn.Module):
     def __init__(self, cfg, num_classes, input_channels):
         super().__init__()
+        self.device = torch.device("cuda")
 
         self.num_classes = num_classes
         self.output_grid_size = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION * 2
@@ -83,14 +84,11 @@ class AlignmentHead(nn.Module):
             output_activation=nn.Sigmoid)
         return
 
-    @property
-    def device(self):
-        return next(self.parameters()).device
-
     def forward(self, data):
+        data['predictions']['alignment_instance_sizes'] = \
+            [len(x) for x in data['predictions']['alignment_instances']]
+
         num_instances = sum(data['predictions']['alignment_instance_sizes'])
-        data['predictions']['alignment_sizes'] = torch.tensor(
-            data['predictions']['alignment_instance_sizes'], device=self.device)
 
         if not self.training and num_instances == 0:
             data['predictions'].update(self.identity())
@@ -98,42 +96,13 @@ class AlignmentHead(nn.Module):
 
         data = self.encode_shape(data)
 
-        if self.training:
-            data['predictions']['intrinsics'] = Intrinsics.cat(
-                [p.gt_intrinsics for p in data['predictions']['alignment_instances']]
-            ).tensor.inverse()
-        else:
-            data['predictions']['intrinsics'] = Intrinsics.cat(
-                [arg['intrinsics'] for arg in data['inputs']['inference_args']]
-            ).tensor.inverse()
-            if data['predictions']['intrinsics'].size(0) > 1:
-                data['predictions']['intrinsics'] = data['predictions']['intrinsics'].repeat_interleave(
-                    data['predictions']['alignment_sizes'], dim=0
-                )
-
         data = self.forward_roi_depth(data)
 
         data = self.forward_scale(data)
 
         data = self.forward_trans(data)
 
-        if self.training:
-            data['predictions']['depth_points'] = data['predictions']['roi_mask_depth_points']
-        else:
-            data['predictions']['depth_points'] = data['predictions']['roi_depth_points'].clone()
-
-        if self.training:
-            data['predictions']['rot_gt'] = Rotations.cat(
-                [p.gt_rotations for p in data['predictions']['alignment_instances']]).tensor
-        else:
-            data['predictions']['rot_gt'] = None
-
         data = self.forward_proc(data)
-
-        if data['predictions']['raw_nocs'] is not None:
-            data['predictions']['raw_nocs'] *= (data['predictions']['mask_probs'] > 0.5)  # Keep all foreground NOCs!
-
-        data['predictions']['has_alignment'] = torch.ones(num_instances, dtype=torch.bool)
         return data
 
     def identity(self):
@@ -174,6 +143,12 @@ class AlignmentHead(nn.Module):
         if self.training:
             assert data['predictions']['alignment_instances'] is not None
 
+        if self.training:
+            data['predictions']['alignment_classes'] = data['predictions']['gt_classes']
+        else:
+            pred_classes = [x.pred_classes for x in data['predictions']['alignment_instances']]
+            data['predictions']['alignment_classes'] = L.cat(pred_classes)
+
         scales = select_classes(
             self.scale_head(data['predictions']['shape_code']),
             self.num_classes,
@@ -198,6 +173,27 @@ class AlignmentHead(nn.Module):
         if self.training:
             assert data['predictions']['mask_gt'] is not None
             assert data['inputs']['image_depths'] is not None
+
+        if self.training:
+            data['inputs']['inference_args'] = None
+        else:
+            data['inputs']['inference_args'] = data['inputs']['targets']
+
+        data['predictions']['alignment_sizes'] = torch.tensor(
+            data['predictions']['alignment_instance_sizes'], device=self.device)
+
+        if self.training:
+            data['predictions']['intrinsics'] = Intrinsics.cat(
+                [p.gt_intrinsics for p in data['predictions']['alignment_instances']]
+            ).tensor.inverse()
+        else:
+            data['predictions']['intrinsics'] = Intrinsics.cat(
+                [arg['intrinsics'] for arg in data['inputs']['inference_args']]
+            ).tensor.inverse()
+            if data['predictions']['intrinsics'].size(0) > 1:
+                data['predictions']['intrinsics'] = data['predictions']['intrinsics'].repeat_interleave(
+                    data['predictions']['alignment_sizes'], dim=0
+                )
 
         data['predictions']['roi_depths'], data['predictions']['roi_depth_points'] = self.crop_and_project_depth(
             data['predictions']['xy_grid'],
@@ -349,6 +345,17 @@ class AlignmentHead(nn.Module):
         return data
 
     def forward_proc(self, data):
+        if self.training:
+            data['predictions']['depth_points'] = data['predictions']['roi_mask_depth_points']
+        else:
+            data['predictions']['depth_points'] = data['predictions']['roi_depth_points'].clone()
+
+        if self.training:
+            data['predictions']['rot_gt'] = Rotations.cat(
+                [p.gt_rotations for p in data['predictions']['alignment_instances']]).tensor
+        else:
+            data['predictions']['rot_gt'] = None
+
         if self.training:
             assert data['predictions']['roi_mask_gt_depth_points'] is not None
             assert data['predictions']['mask_gt'] is not None
