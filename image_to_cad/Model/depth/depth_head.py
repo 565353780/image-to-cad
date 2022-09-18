@@ -16,6 +16,7 @@ from image_to_cad.Model.depth.sobel import Sobel
 class DepthHead(nn.Module):
     def __init__(self, cfg, in_features):
         super().__init__()
+        self.device = torch.device("cuda")
         self.in_features = in_features
 
         # FIXME: This calculation must change if resizing!
@@ -42,6 +43,14 @@ class DepthHead(nn.Module):
         return self.fpn_depth_features.out_channels
 
     def forward(self, data):
+        if self.training:
+            image_depths = []
+            for batched_input in data['inputs']['batched_inputs']:
+                image_depths.append(batched_input.pop('image_depth'))
+            data['inputs']['image_depths'] = torch.cat(image_depths, dim=0).to(self.device)
+        else:
+            data['inputs']['image_depths'] = None
+
         if self.training:
             assert data['inputs']['image_depths'] is not None
 
