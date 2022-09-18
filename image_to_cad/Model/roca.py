@@ -62,17 +62,6 @@ class ROCA(nn.Module):
         return processed_results
 
     def prepareData(self, data):
-        '''
-        need:
-            ['inputs']['batched_inputs']
-
-        create:
-            ['inputs']['images']
-            ['inputs']['image_size']
-            ['inputs']['gt_instances']
-            ['inputs']['targets']
-            ['inputs']['image_depths']
-        '''
         data['inputs']['images'] = self.preprocess_image(data['inputs']['batched_inputs'])
 
         data['inputs']['image_size'] = data['inputs']['images'][0].shape[-2:]
@@ -132,20 +121,6 @@ class ROCA(nn.Module):
         return data['predictions']['post_results'], data['losses']
 
     def refineData(self, data):
-        '''
-        need:
-            ['inputs']['batched_inputs']
-            ['inputs']['images']
-            ['predictions']['depths']
-            ['predictions']['cad_ids']
-
-        create:
-            ['predictions']['post_results']
-
-        details:
-            add depths to post_results
-            add cad_ids to post_results
-        '''
         if self.training:
             data['predictions']['post_results'] = data['predictions']['alignment_instances']
         else:
