@@ -93,9 +93,9 @@ class AlignmentHead(nn.Module):
         num_instances = sum(predictions['alignment_instance_sizes'])
         predictions['alignment_sizes'] = torch.tensor(predictions['alignment_instance_sizes'], device=self.device)
 
-        if not self.training:
-            if num_instances == 0:
-                return self.identity()
+        if not self.training and num_instances == 0:
+            predictions.update(self.identity())
+            return predictions, losses
 
         predictions = self.encode_shape(inputs, predictions)
 
@@ -138,26 +138,20 @@ class AlignmentHead(nn.Module):
         if predictions['raw_nocs'] is not None:
             predictions['raw_nocs'] *= (predictions['mask_probs'] > 0.5)  # Keep all foreground NOCs!
 
-        # Do the retrieval
-        has_alignment = torch.ones(num_instances, dtype=torch.bool)
-        predictions['has_alignment'] = has_alignment
-
+        predictions['has_alignment'] = torch.ones(num_instances, dtype=torch.bool)
         return predictions, losses
 
     def identity(self):
-        losses = {}
-
         device = next(self.parameters()).device
         predictions = {
             'scales_pred': Scales.new_empty(0, device).tensor,
             'trans_pred': Translations.new_empty(0, device).tensor,
             'pred_rotations': Rotations.new_empty(0, device).tensor,
             'has_alignment': torch.zeros(0, device=device).bool(),
-            'pred_indices': torch.zeros(0, device=device).long()
+            'pred_indices': torch.zeros(0, device=device).long(),
+            'cad_ids': [],
         }
-
-        extra_outputs = {'cad_ids': []}
-        return predictions, extra_outputs, losses
+        return predictions
 
     def encode_shape(self, inputs, predictions):
         scaled_boxes = []
