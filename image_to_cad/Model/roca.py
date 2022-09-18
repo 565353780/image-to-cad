@@ -114,8 +114,7 @@ class ROCA(nn.Module):
         )
         data['losses'].update(proposal_losses)
 
-        data['predictions'], detector_losses = self.roi_heads(data['inputs'], data['predictions'])
-        data['losses'].update(detector_losses)
+        data = self.roi_heads(data)
 
         data = self.refineData(data)
         return data['predictions']['post_results'], data['losses']
