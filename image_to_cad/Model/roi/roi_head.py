@@ -60,7 +60,6 @@ class ROCAROIHeads(StandardROIHeads):
             assert inputs['image_depths'] is not None
 
         losses = {}
-        extra_outputs = {}
 
         if self.training:
             predictions['label_and_sample_proposals'] = self.label_and_sample_proposals(
@@ -80,14 +79,12 @@ class ROCAROIHeads(StandardROIHeads):
 
         predictions, depth_losses = self.depth_head(inputs, predictions)
         losses.update(depth_losses)
-        extra_outputs['pred_image_depths'] = predictions['depths']
 
         predictions, alignment_losses = self.forward_alignment(inputs, predictions)
         losses.update(alignment_losses)
 
         predictions, retrieval_losses = self.retrieval_head(inputs, predictions)
         losses.update(retrieval_losses)
-        extra_outputs['cad_ids'] = predictions['cad_ids']
 
         if not self.training:
             # Fill the instances
@@ -99,7 +96,7 @@ class ROCAROIHeads(StandardROIHeads):
                     continue
                 for instance, pred in zip(predictions['alignment_instances'], pred_list):
                     setattr(instance, name, pred)
-        return predictions['alignment_instances'], extra_outputs, losses
+        return predictions, losses
 
     def forward_box(self, predictions):
         losses = {}
