@@ -19,10 +19,13 @@ from image_to_cad.Model.roi.roi_head import ROCAROIHeads
 class ROCA(nn.Module):
     def __init__(self, cfg):
         super().__init__()
+
         input_shape = ShapeSpec(channels=len(cfg.MODEL.PIXEL_MEAN))
+
         self.backbone = build_resnet_fpn_backbone(cfg, input_shape)
         self.proposal_generator = RPN(cfg, self.backbone.output_shape())
         self.roi_heads = ROCAROIHeads(cfg, self.backbone.output_shape())
+
         self.input_format = cfg.INPUT.FORMAT
         self.vis_period = cfg.VIS_PERIOD
         pixel_mean = cfg.MODEL.PIXEL_MEAN
@@ -58,81 +61,112 @@ class ROCA(nn.Module):
             processed_results.append({"instances": r})
         return processed_results
 
-    def prepareData(self, inputs):
-        inputs['images'] = self.preprocess_image(inputs['batched_inputs'])
+    def prepareData(self, data):
+        '''
+        need:
+            ['inputs']['batched_inputs']
 
-        inputs['image_size'] = inputs['images'][0].shape[-2:]
+        create:
+            ['inputs']['images']
+            ['inputs']['image_size']
+            ['inputs']['gt_instances']
+            ['inputs']['targets']
+            ['inputs']['image_depths']
+        '''
+        data['inputs']['images'] = self.preprocess_image(data['inputs']['batched_inputs'])
+
+        data['inputs']['image_size'] = data['inputs']['images'][0].shape[-2:]
 
         if self.training:
-            inputs['gt_instances'] = [
-                x['instances'].to(self.device) for x in inputs['batched_inputs']]
+            data['inputs']['gt_instances'] = [
+                x['instances'].to(self.device) for x in data['inputs']['batched_inputs']]
         else:
-            inputs['gt_instances'] = None
+            data['inputs']['gt_instances'] = None
 
 
         if self.training:
-            inputs['targets'] = inputs['gt_instances']
+            data['inputs']['targets'] = data['inputs']['gt_instances']
         else:
-            inputs['targets'] = [
+            data['inputs']['targets'] = [
                 {'intrinsics': input['intrinsics'].to(self.device)}
-                for input in inputs['batched_inputs']]
+                for input in data['inputs']['batched_inputs']]
 
         if self.training:
             image_depths = []
-            for batched_input in inputs['batched_inputs']:
+            for batched_input in data['inputs']['batched_inputs']:
                 image_depths.append(batched_input.pop('image_depth'))
-            inputs['image_depths'] = torch.cat(image_depths, dim=0).to(self.device)
+            data['inputs']['image_depths'] = torch.cat(image_depths, dim=0).to(self.device)
         else:
-            inputs['image_depths'] = None
+            data['inputs']['image_depths'] = None
 
         if self.training:
-            inputs['scenes'] = None
+            data['inputs']['scenes'] = None
         else:
-            inputs['scenes'] = [batched_input['scene'] for batched_input in inputs['batched_inputs']]
-        return inputs
+            data['inputs']['scenes'] = [batched_input['scene'] for batched_input in data['inputs']['batched_inputs']]
+        return data
 
     def forward(self, batched_inputs):
-        inputs = {}
-        predictions = {}
-        losses = {}
+        data = {
+            'inputs': {},
+            'predictions': {},
+            'losses': {}
+        }
 
-        inputs['batched_inputs'] = batched_inputs
+        data['inputs']['batched_inputs'] = batched_inputs
 
-        inputs = self.prepareData(inputs)
+        data = self.prepareData(data)
 
-        predictions['features'] = self.backbone(inputs['images'].tensor)
+        data['predictions']['features'] = self.backbone(data['inputs']['images'].tensor)
 
-        predictions['proposals'], proposal_losses = self.proposal_generator(
-            inputs['images'],
-            predictions['features'],
-            inputs['gt_instances']
+        data['predictions']['proposals'], proposal_losses = self.proposal_generator(
+            data['inputs']['images'],
+            data['predictions']['features'],
+            data['inputs']['gt_instances']
         )
-        losses.update(proposal_losses)
+        data['losses'].update(proposal_losses)
 
-        predictions, detector_losses = self.roi_heads(inputs, predictions)
-        losses.update(detector_losses)
+        data['predictions'], detector_losses = self.roi_heads(data['inputs'], data['predictions'])
+        data['losses'].update(detector_losses)
 
+        data = self.refineData(data)
+        return data['predictions']['post_results'], data['losses']
+
+    def refineData(self, data):
+        '''
+        need:
+            ['inputs']['batched_inputs']
+            ['inputs']['images']
+            ['predictions']['depths']
+            ['predictions']['cad_ids']
+
+        create:
+            ['predictions']['post_results']
+
+        details:
+            add depths to post_results
+            add cad_ids to post_results
+        '''
         if self.training:
-            predictions['post_results'] = predictions['alignment_instances']
+            data['predictions']['post_results'] = data['predictions']['alignment_instances']
         else:
-            predictions['post_results'] = self.postprocess(
-                predictions['alignment_instances'],
-                inputs['batched_inputs'],
-                inputs['images'].image_sizes
+            data['predictions']['post_results'] = self.postprocess(
+                data['predictions']['alignment_instances'],
+                data['inputs']['batched_inputs'],
+                data['inputs']['images'].image_sizes
             )
 
             # Attach image depths
-            if 'depths' in predictions:
-                pred_image_depths = predictions['depths'].unbind(0)
-                for depth, result in zip(pred_image_depths, predictions['post_results']):
+            if 'depths' in data['predictions']:
+                pred_image_depths = data['predictions']['depths'].unbind(0)
+                for depth, result in zip(pred_image_depths, data['predictions']['post_results']):
                     result['pred_image_depth'] = depth
 
             # Attach CAD ids
-            if 'cad_ids' in predictions:
+            if 'cad_ids' in data['predictions']:
                 # indices are global, so all instances should have all CAD ids
-                for result in predictions['post_results']:
-                    result['cad_ids'] = predictions['cad_ids']
-        return predictions['post_results'], losses
+                for result in data['predictions']['post_results']:
+                    result['cad_ids'] = data['predictions']['cad_ids']
+        return data
 
     def set_train_cads(self, points, ids):
         retrieval_head = self.roi_heads.retrieval_head
