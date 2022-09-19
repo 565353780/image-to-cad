@@ -183,7 +183,7 @@ class ROCA(nn.Module):
                         make_dense_volume(p, VOXEL_RES) for p in points_i
                     ])
                 embeds.append(
-                    retrieval_head.embed_cads(points_i.to(self.device)).cpu()
+                    retrieval_head.cad_net(points_i.to(self.device).float()).cpu()
                 )
 
             points_by_class[cat] = torch.cat(embeds).to(self.device)
