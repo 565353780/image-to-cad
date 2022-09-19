@@ -9,7 +9,6 @@ from collections import defaultdict
 
 from image_to_cad.Data.alignment.rotations import Rotations
 
-#  from image_to_cad.Model.retrieval.pointnet import PointNet
 from image_to_cad.Model.retrieval.resnet_decoder import ResNetDecoder
 from image_to_cad.Model.retrieval.resnet_encoder import ResNetEncoder
 
@@ -49,16 +48,11 @@ class RetrievalHead(nn.Module):
             nn.ReLU(True) if relu_out else nn.Identity()
         )
 
-    @property
-    def has_wild_cads(self) -> bool:
-        return self.wild_points_by_class is not None
-
     def inject_cad_models(self, points, ids, scene_data, device='cpu'):
         self.device = device
         self.has_cads = True
         self.points_by_class = points
         self.cad_ids_by_class = ids
-        # self.dummy_mesh = ico_sphere()
 
         # Parse scene data
         classes = list(self.cad_ids_by_class.keys())
@@ -86,6 +80,58 @@ class RetrievalHead(nn.Module):
             del self.indices_by_scene
             self.has_cads = False
         return
+
+    def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
+        noc_points = voxelize_nocs(grid_to_point_list(noc_points, mask))
+
+        noc_embed = self.noc_net['resnet'](noc_points)
+        result = noc_embed + self.noc_net['image'](shape_code)
+        if self.training:
+            comp = self.noc_net['comp'](noc_embed)
+            # TODO: here can use result as input
+            #  comp = self.noc_net['comp'](result)
+            return result, comp.sigmoid()
+        else:
+            return result
+
+    def embedding_lookup(self, has_alignment, pred_classes, pred_masks,
+                          scenes, noc_points, shape_code):
+        noc_embeds = self.embed_nocs(shape_code, noc_points, pred_masks)
+
+        assert scenes is not None
+        assert has_alignment is not None
+
+        cad_ids = [None for _ in scenes]
+        for scene in set(scenes):
+            scene_mask = [scene_ == scene for scene_ in scenes]
+            scene_noc_embeds = noc_embeds[scene_mask]
+            scene_classes = pred_classes[scene_mask]
+
+            indices = self.indices_by_scene[scene]
+            points_by_class = {}
+            ids_by_class = {}
+            for c in scene_classes.tolist():
+                ind = indices[c]
+                if not len(ind):
+                    continue
+                points_by_class[c] = self.points_by_class[c][ind]
+                ids_by_class[c] = \
+                    [self.cad_ids_by_class[c][i] for i in ind]
+
+            cad_ids_scene = embedding_lookup(
+                scene_classes,
+                scene_noc_embeds,
+                points_by_class,
+                ids_by_class
+            )
+            cad_ids_scene.reverse()
+            for i, m in enumerate(scene_mask):
+                if m:
+                    cad_ids[i] = cad_ids_scene.pop()
+        has_alignment[[id is None for id in cad_ids]] = False
+
+        pred_indices = torch.arange(pred_classes.numel(), dtype=torch.long)
+        return cad_ids, pred_indices
 
     def forward(self, data):
         if not self.training and not self.has_cads:
@@ -129,8 +175,6 @@ class RetrievalHead(nn.Module):
             data['inputs']['scenes'] = [batched_input['scene'] for batched_input in data['inputs']['batched_inputs']]
             if self.has_cads:
                 assert data['inputs']['scenes'] is not None
-
-        if not self.training:
             scenes = list(chain(*(
                 [scene] * isize
                 for scene, isize in zip(data['inputs']['scenes'], data['predictions']['alignment_instance_sizes'])
@@ -139,7 +183,7 @@ class RetrievalHead(nn.Module):
             num_instances = sum(data['predictions']['alignment_instance_sizes'])
             has_alignment = torch.ones(num_instances, dtype=torch.bool)
 
-            data['predictions']['cad_ids'], data['predictions']['pred_indices'] = self._embedding_lookup(
+            data['predictions']['cad_ids'], data['predictions']['pred_indices'] = self.embedding_lookup(
                 has_alignment,
                 data['predictions']['alignment_classes'],
                 data['predictions']['mask_pred'],
@@ -175,56 +219,4 @@ class RetrievalHead(nn.Module):
         pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
         data['losses']['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
         return data
-
-    def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
-        noc_points = voxelize_nocs(grid_to_point_list(noc_points, mask))
-
-        noc_embed = self.noc_net['resnet'](noc_points)
-        result = noc_embed + self.noc_net['image'](shape_code)
-        if self.training:
-            comp = self.noc_net['comp'](noc_embed)
-            # TODO: here can use result as input
-            #  comp = self.noc_net['comp'](result)
-            return result, comp.sigmoid()
-        else:
-            return result
-
-    def _embedding_lookup(self, has_alignment, pred_classes, pred_masks,
-                          scenes, noc_points, shape_code):
-        noc_embeds = self.embed_nocs(shape_code, noc_points, pred_masks)
-
-        assert scenes is not None
-        assert has_alignment is not None
-
-        cad_ids = [None for _ in scenes]
-        for scene in set(scenes):
-            scene_mask = [scene_ == scene for scene_ in scenes]
-            scene_noc_embeds = noc_embeds[scene_mask]
-            scene_classes = pred_classes[scene_mask]
-
-            indices = self.indices_by_scene[scene]
-            points_by_class = {}
-            ids_by_class = {}
-            for c in scene_classes.tolist():
-                ind = indices[c]
-                if not len(ind):
-                    continue
-                points_by_class[c] = self.points_by_class[c][ind]
-                ids_by_class[c] = \
-                    [self.cad_ids_by_class[c][i] for i in ind]
-
-            cad_ids_scene = embedding_lookup(
-                scene_classes,
-                scene_noc_embeds,
-                points_by_class,
-                ids_by_class
-            )
-            cad_ids_scene.reverse()
-            for i, m in enumerate(scene_mask):
-                if m:
-                    cad_ids[i] = cad_ids_scene.pop()
-        has_alignment[[id is None for id in cad_ids]] = False
-
-        pred_indices = torch.arange(pred_classes.numel(), dtype=torch.long)
-        return cad_ids, pred_indices
 
