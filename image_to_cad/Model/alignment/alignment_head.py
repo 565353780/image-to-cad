@@ -338,6 +338,9 @@ class AlignmentHead(nn.Module):
         )
         return data
 
+    def forward_noc(self, data):
+        return data
+
     def forward_proc(self, data):
         if self.training:
             data['predictions']['depth_points'] = data['predictions']['roi_mask_depth_points']
@@ -367,13 +370,11 @@ class AlignmentHead(nn.Module):
             data['predictions']['proc_trans_depth_points'],
             data['predictions']['scales_pred'],
         )
+        data['predictions']['noc_codes'] = noc_codes
 
-        data['predictions']['raw_nocs'] = self.noc_head(noc_codes)
+        data['predictions']['raw_nocs'] = self.noc_head(data['predictions']['noc_codes'])
         data['predictions']['nocs'] = \
             data['predictions']['mask_pred'] * data['predictions']['raw_nocs']
-
-        device = data['predictions']['nocs'].device
-        print(device)
 
         if self.training:
             data = self.noc_loss(data)
@@ -382,14 +383,12 @@ class AlignmentHead(nn.Module):
         data['predictions']['proc_has_enough'] = \
             data['predictions']['mask_pred'].flatten(1).sum(-1) >= self.min_nocs
         do_proc = data['predictions']['proc_has_enough'].any()
-        print("do_proc")
-        print(do_proc)
 
         if do_proc:
             rot, data['predictions']['proc_solve_trs'] = self.solve_proc(
                 data['predictions']['nocs'],
                 data['predictions']['proc_trans_depth_points'],
-                noc_codes,
+                data['predictions']['noc_codes'],
                 data['predictions']['alignment_classes'],
                 data['predictions']['proc_has_enough'],
                 data['predictions']['scales_pred'],
@@ -411,9 +410,8 @@ class AlignmentHead(nn.Module):
                     rot
                 )
         else:
-            device = data['predictions']['nocs'].device
             batch_size = data['predictions']['proc_has_enough'].numel()
-            rot = Rotations.new_empty(batch_size, device=device).tensor
+            rot = Rotations.new_empty(batch_size, device=self.device).tensor
         data['predictions']['rot_pred'] = rot
         return data
 
