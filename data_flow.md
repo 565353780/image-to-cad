@@ -75,5 +75,24 @@ roi_gt_depth_points, mask_gt -> roi_mask_gt_depth_points
 
 ```bash
 gt_classes[train]/alignment_instances[infer] -> alignment_classes
+alignment_classes, shape_code -> scales_pred
+alignment_instances -> scales_gt[train]
+```
+
+#### trans
+
+```bash
+roi_mask_depths, roi_mask_depth_points, shape_code, alignment_classes -> trans_pred
+alignment_instances -> trans_gt
+```
+
+#### proc
+
+```bash
+roi_mask_depth_points[train]/roi_depth_points[infer] -> depth_points
+alignment_instances -> rot_gt
+depth_points, trans_pred -> proc_trans_depth_points
+shape_code, proc_trans_depth_points, scales_pred -> raw_nocs
+raw_nocs, mask_pred -> nocs
 ```
 
