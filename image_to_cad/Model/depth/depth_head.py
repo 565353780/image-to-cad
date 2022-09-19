@@ -70,10 +70,10 @@ class DepthHead(nn.Module):
         data['predictions']['depth_features'] = depth_features
 
         if self.training:
-            data = self.loss(data)
+            data = self.depth_loss(data)
         return data
 
-    def loss(self, data):
+    def depth_loss(self, data):
         assert data['inputs']['image_depths'] is not None
 
         mask = data['inputs']['image_depths'] > 1e-5
