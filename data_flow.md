@@ -103,7 +103,9 @@ proc_solve_rot, proc_has_enough -> rot_pred
 ### RetrievalHead
 
 ```bash
-
-
+alignment_instances -> pos_cads, neg_cads
+mask_pred, pos_cads[train] -> retrieval_masks
+shape_code, pos_cads[train] -> retrieval_shape_code
+nocs, pos_cads[train] -> retrieval_noc_points
 ```
 
