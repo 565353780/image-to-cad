@@ -142,26 +142,22 @@ class RetrievalHead(nn.Module):
             data['predictions']['retrieval_masks'] = data['predictions']['mask_pred'][sample]
             data['predictions']['retrieval_shape_code'] = data['predictions']['shape_code'][sample]
             data['predictions']['retrieval_noc_points'] = data['predictions']['nocs'][sample]
-        else:
-            data['predictions']['retrieval_masks'] = data['predictions']['mask_pred']
-            data['predictions']['retrieval_shape_code'] = data['predictions']['shape_code']
-
-            if self.has_cads:
-                if data['predictions']['raw_nocs'] is not None:
-                    # Keep all foreground NOCs!
-                    data['predictions']['raw_nocs'] *= (data['predictions']['mask_probs'] > 0.5)
-                    data['predictions']['retrieval_noc_points'] = data['predictions']['raw_nocs']
-                else:
-                    rotation_mats = Rotations(data['predictions']['rot_pred'])\
-                        .as_rotation_matrices()\
-                        .mats
-                    data['predictions']['retrieval_noc_points'] = inverse_transform(
-                        data['predictions']['roi_mask_depth_points'],
-                        data['predictions']['mask_pred'],
-                        data['predictions']['scales_pred'],
-                        rotation_mats,
-                        data['predictions']['trans_pred']
-                    )
+        elif self.has_cads:
+            if data['predictions']['raw_nocs'] is not None:
+                # Keep all foreground NOCs!
+                data['predictions']['retrieval_noc_points'] = \
+                    data['predictions']['raw_nocs'] * (data['predictions']['mask_probs'] > 0.5)
+            else:
+                rotation_mats = Rotations(data['predictions']['rot_pred'])\
+                    .as_rotation_matrices()\
+                    .mats
+                data['predictions']['retrieval_noc_points'] = inverse_transform(
+                    data['predictions']['roi_mask_depth_points'],
+                    data['predictions']['mask_pred'],
+                    data['predictions']['scales_pred'],
+                    rotation_mats,
+                    data['predictions']['trans_pred']
+                )
 
         if self.training:
             data['inputs']['scenes'] = None
@@ -185,10 +181,10 @@ class RetrievalHead(nn.Module):
             cad_ids, pred_indices = self._embedding_lookup(
                 data['predictions']['has_alignment'],
                 data['predictions']['alignment_classes'],
-                data['predictions']['retrieval_masks'],
+                data['predictions']['mask_pred'],
                 scenes,
                 data['predictions']['retrieval_noc_points'],
-                shape_code=data['predictions']['retrieval_shape_code'],
+                shape_code=data['predictions']['shape_code'],
             )
             data['predictions']['cad_ids'] = cad_ids
             data['predictions']['pred_indices'] = pred_indices
