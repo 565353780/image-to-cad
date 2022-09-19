@@ -40,10 +40,11 @@ class ROCADetector(object):
         return True
 
     def loadSettings(self, roca_settings):
-        self.predictor = Predictor(roca_settings["data_dir"],
-                                   roca_settings["model_path"],
-                                   roca_settings["config_path"],
-                                   wild=roca_settings["wild"])
+        self.predictor = Predictor(
+            roca_settings["data_dir"],
+            roca_settings["model_path"],
+            roca_settings["config_path"]
+        )
 
         self.to_file = roca_settings["output_dir"] != "none"
         return True
@@ -71,7 +72,7 @@ class ROCADetector(object):
 
         self.meshes = self.predictor.output_to_mesh(
             self.instances, self.cad_ids,
-            excluded_classes={'table'} if self.predictor.wild else (),
+            excluded_classes=(),
             as_open3d=not self.to_file,
             nms_3d=False)
 
@@ -174,7 +175,6 @@ def demo():
         "model_path": "./Models/model_best.pth",
         "data_dir": "./Dataset/Dataset/",
         "config_path": "./Models/config.yaml",
-        "wild": False,
         "output_dir": "none",
     }
 

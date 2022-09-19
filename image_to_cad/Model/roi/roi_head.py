@@ -34,7 +34,7 @@ class ROCAROIHeads(StandardROIHeads):
         self.box_predictor = WeightedFastRCNNOutputLayers(cfg, self.box_head.output_shape)
         self.depth_head = DepthHead(cfg, self.in_features)
         self.alignment_head = AlignmentHead(cfg, self.num_classes, self.depth_head.out_channels)
-        self.retrieval_head = RetrievalHead(cfg)
+        self.retrieval_head = RetrievalHead()
         self.mask_head.predictor = nn.Conv2d(
             self.mask_head.deconv.out_channels, self.num_classes + 1, kernel_size=(1, 1))
 

@@ -123,20 +123,15 @@ class ROCA(nn.Module):
 
     def set_train_cads(self, points, ids):
         retrieval_head = self.roi_heads.retrieval_head
-
         retrieval_head.wild_points_by_class = points
         retrieval_head.wild_ids_by_class = ids
-
-        self.train_cads_embedded = False
+        return
 
     def unset_train_cads(self):
         retrieval_head = self.roi_heads.retrieval_head
         retrieval_head.wild_points_by_class = None
         retrieval_head.wild_ids_by_class = None
-        self.train_cads_embedded = False
-
-    def embed_train_cads(self, batch_size: int = 16):
-        return self._embed_cads(wild=True, batch_size=batch_size)
+        return
 
     def set_cad_models(self, points, ids, scene_data):
         self.roi_heads.retrieval_head.inject_cad_models(
@@ -145,54 +140,34 @@ class ROCA(nn.Module):
             scene_data=scene_data,
             device='cpu' #FIXME: why use cpu?
         )
-        self.val_cads_embedded = False
+        return
 
     def unset_cad_models(self):
         self.roi_heads.retrieval_head.eject_cad_models()
-        self.val_cads_embedded = False
-
-    def embed_cad_models(self, batch_size: int = 16):
-        return self._embed_cads(wild=False, batch_size=batch_size)
+        return
 
     @torch.no_grad()
-    def _embed_cads(self, wild: bool = True, batch_size: int = 16):
+    def embed_cads(self, batch_size=16):
         retrieval_head = self.roi_heads.retrieval_head
-        if wild:
-            assert retrieval_head.has_wild_cads, \
-                'Call `set_train_cads` before embedding cads'
-            points_by_class = retrieval_head.wild_points_by_class
-        else:
-            assert retrieval_head.has_cads, \
-                'Call `set_cad_models` before embedding cads'
-            points_by_class = retrieval_head.points_by_class
+        assert retrieval_head.has_cads, \
+            'Call `set_cad_models` before embedding cads'
+        points_by_class = retrieval_head.points_by_class
 
-        # Below makes this function callable twice!
-        if wild and self.train_cads_embedded:
-            return
-        if not wild and self.val_cads_embedded:
-            return
-
-        is_voxel = self.roi_heads.retrieval_head.is_voxel
         for cat, points in points_by_class.items():
             embeds = []
-            total_size = points.size(0) if not is_voxel else len(points)
+            total_size = len(points)
             for i in range(0, total_size, batch_size):
                 points_i = points[i:min(i + batch_size, total_size)]
-                if is_voxel:
-                    points_i = torch.stack([
-                        make_dense_volume(p, VOXEL_RES) for p in points_i
-                    ])
+                points_i = torch.stack([
+                    make_dense_volume(p, VOXEL_RES) for p in points_i
+                ])
                 embeds.append(
                     retrieval_head.cad_net(points_i.to(self.device).float()).cpu()
                 )
 
             points_by_class[cat] = torch.cat(embeds).to(self.device)
             del embeds
-
-        if wild:
-            self.train_cads_embedded = True
-        else:
-            self.val_cads_embedded = True
+        return
 
     def __getattr__(self, k):
         # Data dependency injections

@@ -9,23 +9,20 @@ from collections import defaultdict
 
 from image_to_cad.Data.alignment.rotations import Rotations
 
-from image_to_cad.Model.retrieval.pointnet import PointNet
+#  from image_to_cad.Model.retrieval.pointnet import PointNet
 from image_to_cad.Model.retrieval.resnet_decoder import ResNetDecoder
 from image_to_cad.Model.retrieval.resnet_encoder import ResNetEncoder
 
 from image_to_cad.Method.retrieval_ops import \
-    embedding_lookup, grid_to_point_list, \
-    nearest_points_retrieval, random_retrieval, voxelize_nocs
+    embedding_lookup, grid_to_point_list, voxelize_nocs
 
 from image_to_cad.Method.alignment_ops import inverse_transform
 
 class RetrievalHead(nn.Module):
-    def __init__(self, cfg, shape_code_size=512, margin=0.5):
+    def __init__(self, shape_code_size=512, margin=0.5):
         super().__init__()
         self.has_cads = False
-        self.mode = cfg.MODEL.RETRIEVAL_MODE
         self.shape_code_size = shape_code_size
-        self.is_voxel = cfg.INPUT.CAD_TYPE == 'voxel'
 
         # NOTE: Make them embeddings for the learned model
         self.wild_points_by_class = None

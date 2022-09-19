@@ -21,11 +21,9 @@ from image_to_cad.Method.nms import getKeepList
 from image_to_cad.Method.matrix import make_M_from_tqs
 
 class Predictor(object):
-    def __init__(self, data_dir, model_path, config_path, thresh=0.5, wild=False):
+    def __init__(self, data_dir, model_path, config_path, thresh=0.5):
         cfg = roca_config('Scan2CAD', 'Scan2CAD')
         cfg.merge_from_file(config_path)
-        if wild:
-            cfg.MODEL.WILD_RETRIEVAL_ON = True
         cfg.MODEL.INSTANCES_CONFIDENCE_THRESH = thresh
 
         model = ROCA(cfg)
@@ -43,17 +41,7 @@ class Predictor(object):
         cad_manager = CADCatalog.get(data_name)
         points, ids = cad_manager.batched_points_and_ids(volumes=True)
         model.set_cad_models(points, ids, cad_manager.scene_alignments)
-        model.embed_cad_models()
-
-        self.wild = wild
-        if wild:
-            data_name = data_name.replace('Val', 'Train')
-            register_scan2cad(data_name, {}, '', data_dir, '', '', 'train')
-            cad_manager = CADCatalog.get(data_name)
-            train_points, train_ids = cad_manager.batched_points_and_ids(
-                volumes=True)
-            model.set_train_cads(train_points, train_ids)
-            model.embed_train_cads()
+        model.embed_cads()
 
         self.model = model
         self.cad_manager = cad_manager
