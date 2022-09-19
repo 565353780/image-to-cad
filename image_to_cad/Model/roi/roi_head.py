@@ -144,6 +144,7 @@ class ROCAROIHeads(StandardROIHeads):
             data['predictions']['mask_gt'] = Masks\
                 .cat([p.gt_masks for p in data['predictions']['alignment_instances']])\
                 .crop_and_resize_with_grid(data['predictions']['xy_grid_n'], self.output_grid_size)
+            assert data['predictions']['mask_gt'] is not None
 
         if self.training:
             data['predictions']['class_weights'] = self.class_weights[
