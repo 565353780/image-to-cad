@@ -129,22 +129,20 @@ class AlignmentHead(nn.Module):
             )
             scaled_boxes.append(b.tensor)
 
-        shape_features = L.roi_align(
+        data['predictions']['shape_features'] = L.roi_align(
             data['predictions']['depth_features'],
             scaled_boxes,
             self.output_grid_size
         )
-        data['predictions']['shape_features'] = shape_features
 
-        shape_code = self.shape_encoder(shape_features, data['predictions']['mask_pred'])
-        shape_code = self.shape_code_drop(shape_code)
-        data['predictions']['shape_code'] = shape_code
+        shape_code = self.shape_encoder(
+            data['predictions']['shape_features'],
+            data['predictions']['mask_pred']
+        )
+        data['predictions']['shape_code'] = self.shape_code_drop(shape_code)
         return data
 
     def forward_scale(self, data):
-        if self.training:
-            assert data['predictions']['alignment_instances'] is not None
-
         if self.training:
             data['predictions']['alignment_classes'] = data['predictions']['gt_classes']
         else:
@@ -176,14 +174,6 @@ class AlignmentHead(nn.Module):
             assert data['predictions']['mask_gt'] is not None
             assert data['inputs']['image_depths'] is not None
 
-        if self.training:
-            data['inputs']['inference_args'] = None
-        else:
-            data['inputs']['inference_args'] = [
-                {'intrinsics': input['intrinsics'].to(self.device)}
-                for input in data['inputs']['batched_inputs']
-            ]
-
         data['predictions']['alignment_sizes'] = torch.tensor(
             data['predictions']['alignment_instance_sizes'], device=self.device)
 
@@ -192,8 +182,12 @@ class AlignmentHead(nn.Module):
                 [p.gt_intrinsics for p in data['predictions']['alignment_instances']]
             ).tensor.inverse()
         else:
+            inference_args = [
+                {'intrinsics': input['intrinsics'].to(self.device)}
+                for input in data['inputs']['batched_inputs']
+            ]
             data['predictions']['intrinsics'] = Intrinsics.cat(
-                [arg['intrinsics'] for arg in data['inputs']['inference_args']]
+                [arg['intrinsics'] for arg in inference_args]
             ).tensor.inverse()
             if data['predictions']['intrinsics'].size(0) > 1:
                 data['predictions']['intrinsics'] = data['predictions']['intrinsics'].repeat_interleave(
@@ -208,34 +202,6 @@ class AlignmentHead(nn.Module):
             data['predictions']['alignment_sizes']
         )
 
-        if self.training:
-            data['predictions']['roi_gt_depths'], data['predictions']['roi_gt_depth_points'] = self.crop_and_project_depth(
-                data['predictions']['xy_grid'],
-                data['inputs']['image_depths'],
-                data['predictions']['intrinsics'],
-                data['predictions']['xy_grid_n'],
-                data['predictions']['alignment_sizes'],
-            )
-
-            data['losses']['loss_roi_depth'] = masked_l1_loss(
-                data['predictions']['roi_depths'],
-                data['predictions']['roi_gt_depths'],
-                data['predictions']['mask_gt'],
-                weights=data['predictions']['class_weights']
-            )
-
-            #FIXME: log this metric
-            # Log metrics to tensorboard
-            #  metric_dict = depth_metrics(
-                #  data['predictions']['roi_depths'],
-                #  data['predictions']['roi_gt_depths'],
-                #  data['predictions']['mask_gt'],
-                #  pref='depth/roi_'
-            #  )
-        else:
-            data['predictions']['roi_gt_depths'] = None
-            data['predictions']['roi_gt_depth_points'] = None
-
         data['predictions']['roi_mask_depths'] = \
             data['predictions']['roi_depths'] * data['predictions']['mask_pred']
         data['predictions']['roi_mask_depth_points'] = \
@@ -246,28 +212,53 @@ class AlignmentHead(nn.Module):
                 data['predictions']['roi_gt_depths'] * data['predictions']['mask_gt']
             data['predictions']['roi_mask_gt_depth_points'] = \
                 data['predictions']['roi_gt_depth_points'] * data['predictions']['mask_gt']
-        else:
-            data['predictions']['roi_mask_gt_depths'] = None
-            data['predictions']['roi_mask_gt_depth_points'] = None
 
         if self.training:
-            # Penalize depth means
-            # TODO: make this loss optional
-            roi_mask_depth_mean_pred = point_mean(
-                data['predictions']['roi_mask_depths'],
-                point_count(data['predictions']['mask_pred'])
-            )
+            data = self.roi_depth_loss(data)
+        return data
 
-            roi_mask_depth_mean_gt = point_mean(
-                data['predictions']['roi_mask_gt_depths'],
-                point_count(data['predictions']['mask_gt'])
-            )
+    def roi_depth_loss(self, data):
+        data['predictions']['roi_gt_depths'], data['predictions']['roi_gt_depth_points'] = self.crop_and_project_depth(
+            data['predictions']['xy_grid'],
+            data['inputs']['image_depths'],
+            data['predictions']['intrinsics'],
+            data['predictions']['xy_grid_n'],
+            data['predictions']['alignment_sizes'],
+        )
 
-            data['losses']['loss_mean_depth'] = l1_loss(
-                roi_mask_depth_mean_pred,
-                roi_mask_depth_mean_gt,
-                weights=data['predictions']['class_weights']
-            )
+        data['losses']['loss_roi_depth'] = masked_l1_loss(
+            data['predictions']['roi_depths'],
+            data['predictions']['roi_gt_depths'],
+            data['predictions']['mask_gt'],
+            weights=data['predictions']['class_weights']
+        )
+
+        #FIXME: log this metric
+        # Log metrics to tensorboard
+        #  metric_dict = depth_metrics(
+            #  data['predictions']['roi_depths'],
+            #  data['predictions']['roi_gt_depths'],
+            #  data['predictions']['mask_gt'],
+            #  pref='depth/roi_'
+        #  )
+
+        # Penalize depth means
+        # TODO: make this loss optional
+        roi_mask_depth_mean_pred = point_mean(
+            data['predictions']['roi_mask_depths'],
+            point_count(data['predictions']['mask_pred'])
+        )
+
+        roi_mask_depth_mean_gt = point_mean(
+            data['predictions']['roi_mask_gt_depths'],
+            point_count(data['predictions']['mask_gt'])
+        )
+
+        data['losses']['loss_mean_depth'] = l1_loss(
+            roi_mask_depth_mean_pred,
+            roi_mask_depth_mean_gt,
+            weights=data['predictions']['class_weights']
+        )
         return data
 
     def crop_and_project_depth(
