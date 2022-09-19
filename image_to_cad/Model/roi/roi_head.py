@@ -120,19 +120,17 @@ class ROCAROIHeads(StandardROIHeads):
         if self.training:
             data['predictions']['gt_classes'] = \
                 L.cat([p.gt_classes for p in data['predictions']['alignment_instances']])
-        else:
-            data['predictions']['gt_classes'] = None
 
         if self.training:
-            data['predictions']['mask_classes'] = data['predictions']['gt_classes']
+            mask_classes = data['predictions']['gt_classes']
         else:
             pred_classes = [x.pred_classes for x in data['predictions']['alignment_instances']]
-            data['predictions']['mask_classes'] = L.cat(pred_classes)
+            mask_classes = L.cat(pred_classes)
 
         data['predictions']['mask_logits'] = select_classes(
             mask_logits,
             self.num_classes + 1,
-            data['predictions']['mask_classes']
+            mask_classes
         )
 
         data['predictions']['mask_probs'] = torch.sigmoid(data['predictions']['mask_logits'])
@@ -146,8 +144,6 @@ class ROCAROIHeads(StandardROIHeads):
             data['predictions']['mask_gt'] = Masks\
                 .cat([p.gt_masks for p in data['predictions']['alignment_instances']])\
                 .crop_and_resize_with_grid(data['predictions']['xy_grid_n'], self.output_grid_size)
-        else:
-            data['predictions']['mask_gt'] = None
 
         if self.training:
             data['predictions']['class_weights'] = self.class_weights[
@@ -157,9 +153,6 @@ class ROCAROIHeads(StandardROIHeads):
 
         if self.training:
             data = self.mask_loss(data)
-
-        data['predictions']['mask_pred'] = data['predictions']['mask_pred'].to(
-            data['predictions']['mask_probs'].dtype)
         return data
 
     def forward(self, data):
