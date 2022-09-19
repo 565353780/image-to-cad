@@ -21,8 +21,6 @@ inputs.batched_inputs -> inputs.gt_instances[train]
 inputs.images, features, inputs.gt_instances[train] -> proposals
 ```
 
-### ROCAROI
-
 #### box
 
 ```bash
@@ -49,16 +47,16 @@ alignment_instances -> gt_classes -> class_weights
 alignment_instances, xy_grid_n -> mask_gt
 ```
 
-### AlignmentHead
+#### AlignmentHead
 
-#### encode_shape
+##### encode_shape
 
 ```bash
 alignment_instances -> alignment_instance_sizes
 depth_features -> shape_features -> shape_code
 ```
 
-#### roi_depth
+##### roi_depth
 
 ```bash
 alignment_instance_sizes -> alignment_sizes
@@ -71,7 +69,7 @@ roi_gt_depths, mask_gt -> roi_mask_gt_depths
 roi_gt_depth_points, mask_gt -> roi_mask_gt_depth_points
 ```
 
-#### scale
+##### scale
 
 ```bash
 gt_classes[train]/alignment_instances[infer] -> alignment_classes
@@ -79,14 +77,14 @@ alignment_classes, shape_code -> scales_pred
 alignment_instances -> scales_gt[train]
 ```
 
-#### trans
+##### trans
 
 ```bash
 roi_mask_depths, roi_mask_depth_points, shape_code, alignment_classes -> trans_pred
 alignment_instances -> trans_gt
 ```
 
-#### proc
+##### noc
 
 ```bash
 roi_mask_depth_points[train]/roi_depth_points[infer] -> depth_points
@@ -94,13 +92,18 @@ alignment_instances -> rot_gt
 depth_points, trans_pred -> proc_trans_depth_points
 shape_code, proc_trans_depth_points, scales_pred -> raw_nocs
 raw_nocs, mask_pred -> nocs
+```
+
+##### proc
+
+```bash
 mask_pred -> proc_has_enough
 nocs, proc_trans_depth_points, noc_codes, alignment_classes, proc_has_enough, scales_pred, mask_pred, mask_probs -> proc_solve_rot, proc_solve_trs
 proc_solve_trs, proc_has_enough -> trans_pred(update)
 proc_solve_rot, proc_has_enough -> rot_pred
 ```
 
-### RetrievalHead
+#### RetrievalHead
 
 ```bash
 alignment_instances -> pos_cads, neg_cads -> retrieval_pos_cads, retrieval_neg_cads
