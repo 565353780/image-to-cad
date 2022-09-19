@@ -6,10 +6,8 @@ import torch.nn as nn
 
 from image_to_cad.Model.depth.depth_features import DepthFeatures
 from image_to_cad.Model.depth.depth_output import DepthOutput
-from image_to_cad.Model.depth.sobel import Sobel
 
-from image_to_cad.Loss.loss_functions import \
-    cosine_distance, inverse_huber_loss
+from image_to_cad.Loss.loss_functions import inverse_huber_loss
 
 from image_to_cad.Metric.logging_metrics import depth_metrics
 
@@ -31,10 +29,6 @@ class DepthHead(nn.Module):
             up_ratio
         )
 
-        if cfg.MODEL.DEPTH_GRAD_LOSSES:
-            self.sobel = Sobel()
-
-        self.use_grad_losses = cfg.MODEL.DEPTH_GRAD_LOSSES
         self.use_batch_average = cfg.MODEL.DEPTH_BATCH_AVERAGE
         return
 
@@ -88,12 +82,6 @@ class DepthHead(nn.Module):
         if not flt.any():
             zero_loss = torch.tensor(0.0, device=mask.device)
             data['losses']['loss_image_depth'] = zero_loss
-            if self.use_grad_losses:
-                data['losses'].update({
-                    'loss_grad_x': zero_loss.clone(),
-                    'loss_grad_y': zero_loss.clone(),
-                    'loss_normal': zero_loss.clone()
-                })
             return data
 
         mask = mask[flt]
@@ -105,23 +93,6 @@ class DepthHead(nn.Module):
             depth_pred, depth_gt,
             mask, mask_inputs=False,
             instance_average=self.use_batch_average)
-
-        # Grad loss
-        if self.use_grad_losses:
-            gradx_pred, grady_pred = self.sobel(depth_pred).chunk(2, dim=1)
-            gradx_gt, grady_gt = self.sobel(depth_gt).chunk(2, dim=1)
-            data['losses']['loss_grad_x'] = inverse_huber_loss(
-                gradx_pred, gradx_gt,
-                mask, mask_inputs=False)
-            data['losses']['loss_grad_y'] = inverse_huber_loss(
-                grady_pred, grady_gt,
-                mask, mask_inputs=False)
-
-            ones = torch.ones_like(gradx_pred)
-            normal_pred = torch.cat([-gradx_pred, -grady_pred, ones], 1)
-            normal_gt = torch.cat([-gradx_gt, -grady_gt, ones], 1)
-            data['losses']['loss_normal'] = 5 * cosine_distance(
-                normal_pred, normal_gt, mask)
 
         depth_metric_dict = depth_metrics(
             depth_pred, depth_gt,
