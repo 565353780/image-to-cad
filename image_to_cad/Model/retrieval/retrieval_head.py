@@ -33,48 +33,15 @@ class RetrievalHead(nn.Module):
 
         self.loss = nn.TripletMarginLoss(margin=margin)
 
-        if '_' in self.mode:
-            self.cad_mode, self.noc_mode = self.mode.split('_')
-        else:
-            self.cad_mode = self.noc_mode = self.mode
+        self.cad_net = ResNetEncoder()
 
-        if self.cad_mode == 'pointnet':
-            assert not self.is_voxel, 'Inconsistent CAD modality'
-            self.cad_net = PointNet()
-        elif self.cad_mode == 'resnet':
-            assert self.is_voxel, 'Inconsistent CAD modality'
-            self.cad_net = ResNetEncoder()
-        else:
-            raise ValueError(
-                'Unknown CAD network type {}'.format(self.cad_mode)
-            )
-
-        if self.noc_mode == 'pointnet':
-            self.noc_net = PointNet()
-        elif self.noc_mode == 'image':
-            self.noc_net = self.make_image_mlp()
-        elif self.noc_mode == 'pointnet+image':
-            self.noc_net = nn.ModuleDict({
-                'pointnet': PointNet(),
-                'image': self.make_image_mlp()
-            })
-        elif self.noc_mode == 'resnet':
-            self.noc_net = ResNetEncoder()
-        elif self.noc_mode == 'resnet+image':
-            self.noc_net = nn.ModuleDict({
-                'resnet': ResNetEncoder(),
-                'image': self.make_image_mlp()
-            })
-        elif self.noc_mode in ('resnet+image+comp', 'resnet+image+fullcomp'):
-            resnet = ResNetEncoder()
-            self.noc_net = nn.ModuleDict({
-                'resnet': resnet,
-                'image': self.make_image_mlp(),
-                'comp': ResNetDecoder(relu_in=True, feats=resnet.feats)
-            })
-            self.comp_loss = nn.BCELoss()
-        else:
-            raise ValueError('Unknown noc mode {}'.format(self.noc_mode))
+        resnet = ResNetEncoder()
+        self.noc_net = nn.ModuleDict({
+            'resnet': resnet,
+            'image': self.make_image_mlp(),
+            'comp': ResNetDecoder(relu_in=True, feats=resnet.feats)
+        })
+        self.comp_loss = nn.BCELoss()
         return
 
     def make_image_mlp(self, relu_out=True):
@@ -92,10 +59,7 @@ class RetrievalHead(nn.Module):
     def inject_cad_models(self, points, ids, scene_data, device='cpu'):
         self.device = device
         self.has_cads = True
-        if self.is_voxel:
-            self.points_by_class = points
-        else:
-            self.points_by_class = {k: v.to(device) for k, v in points.items()}
+        self.points_by_class = points
         self.cad_ids_by_class = ids
         # self.dummy_mesh = ico_sphere()
 
@@ -144,6 +108,9 @@ class RetrievalHead(nn.Module):
             data['predictions']['retrieval_masks'] = data['predictions']['mask_pred'][sample]
             data['predictions']['retrieval_shape_code'] = data['predictions']['shape_code'][sample]
             data['predictions']['retrieval_noc_points'] = data['predictions']['nocs'][sample]
+            assert data['predictions']['retrieval_masks'] is not None
+            assert data['predictions']['retrieval_shape_code'] is not None
+            assert data['predictions']['retrieval_noc_points'] is not None
         elif self.has_cads:
             if data['predictions']['raw_nocs'] is not None:
                 # Keep all foreground NOCs!
@@ -198,131 +165,32 @@ class RetrievalHead(nn.Module):
             noc_points=data['predictions']['retrieval_noc_points'],
             mask=data['predictions']['retrieval_masks']
         )
-        if isinstance(noc_embed, tuple):  # Completion
+        if isinstance(noc_embed, tuple):
             noc_embed, noc_comp = noc_embed
             data['losses']['loss_noc_comp'] = self.comp_loss(
                 noc_comp, data['predictions']['retrieval_pos_cads'].to(dtype=noc_comp.dtype)
             )
 
-        cad_embeds = self.embed_cads(torch.cat([
+        cad_embeds = self.cad_net(torch.cat([
             data['predictions']['retrieval_pos_cads'],
             data['predictions']['retrieval_neg_cads']
-        ]))
+        ]).float())
         pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
         data['losses']['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
         return data
 
     def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
-        # Assertions
-        if 'image' in self.noc_mode:
-            assert shape_code is not None
-        if self.noc_mode != 'image':
-            assert noc_points is not None
-            assert mask is not None
+        noc_points = voxelize_nocs(grid_to_point_list(noc_points, mask))
 
-        if self.is_voxel:
-            noc_points = voxelize_nocs(grid_to_point_list(noc_points, mask))
-
-        if self.noc_mode == 'image':
-            return self.noc_net(shape_code)
-        elif self.noc_mode == 'pointnet':
-            return self.noc_net(noc_points, mask)
-        elif self.noc_mode == 'pointnet+image':
-            return (
-                self.noc_net['pointnet'](noc_points, mask)
-                + self.noc_net['image'](shape_code)
-            )
-        elif self.noc_mode == 'resnet':
-            return self.noc_net(noc_points)
-        elif self.noc_mode == 'resnet+image':
-            return (
-                self.noc_net['resnet'](noc_points)
-                + self.noc_net['image'](shape_code)
-            )
-        elif self.noc_mode in ('resnet+image+comp', 'resnet+image+fullcomp'):
-            noc_embed = self.noc_net['resnet'](noc_points)
-            result = noc_embed + self.noc_net['image'](shape_code)
-            if self.training:
-                if self.noc_mode == 'resnet+image+comp':
-                    comp = self.noc_net['comp'](noc_embed)
-                else:  # full comp
-                    comp = self.noc_net['comp'](result)
-                return result, comp.sigmoid_()
-            else:
-                return result
+        noc_embed = self.noc_net['resnet'](noc_points)
+        result = noc_embed + self.noc_net['image'](shape_code)
+        if self.training:
+            comp = self.noc_net['comp'](noc_embed)
+            # TODO: here can use result as input
+            #  comp = self.noc_net['comp'](result)
+            return result, comp.sigmoid()
         else:
-            raise ValueError('Unknown noc embedding type {}'
-                             .format(self.noc_mode))
-
-    def embed_cads(self, cad_points):
-        if self.is_voxel:
-            return self.cad_net(cad_points.float())
-        else:  # Point clouds
-            return self.cad_net(cad_points.transpose(-2, -1))
-
-    def _perform_baseline(self, has_alignment, pred_classes,
-                          pred_masks, scenes,
-                          noc_points=None):
-        num_instances = pred_classes.numel()
-        if has_alignment is None:
-            has_alignment = torch.ones(num_instances, dtype=torch.bool)
-
-        if self.mode == 'nearest':
-            function = nearest_points_retrieval
-        elif self.mode == 'random':
-            function = random_retrieval
-        elif self.mode == 'first':
-            function = 'first'
-        else:
-            raise ValueError('Unknown retrieval mode: {}'.format(self.mode))
-
-        # meshes = []
-        ids = []
-        j = -1
-        for i, scene in enumerate(scenes):
-            if not has_alignment[i].item():
-                # meshes.append(self.dummy_mesh)
-                ids.append(None)
-                continue
-            j += 1
-
-            pred_class = pred_classes[j].item()
-
-            points_by_class = self.points_by_class[pred_class]
-            point_indices = self.indices_by_scene[scene][pred_class]
-            if len(point_indices) == 0:
-                # meshes.append(self.dummy_mesh)
-                ids.append(None)
-                has_alignment[i] = False  # No CAD -> No Alignment
-                continue
-            points_by_class = points_by_class[point_indices]
-            cad_ids_by_class = self.cad_ids_by_class[pred_class]
-
-            if function is nearest_points_retrieval:
-                assert noc_points is not None
-                index, _ = function(
-                    noc_points[j],
-                    pred_masks[j],
-                    points_by_class,
-                    use_median=False,  # True
-                    # mask_probs=mask_probs[j]
-                )
-            elif isinstance(function, str) and function == 'first':
-                index = torch.zeros(1).int()
-            elif function is random_retrieval:
-                index, _ = random_retrieval(points_by_class)
-            else:
-                raise ValueError('Unknown baseline {}'.format(function))
-
-            index = index.item()
-            index = point_indices[index]
-            ids.append(cad_ids_by_class[index])
-
-        # Model ids
-        cad_ids = ids
-        # To handle sorting and filtering of instances
-        pred_indices = torch.arange(num_instances, dtype=torch.long)
-        return cad_ids, pred_indices
+            return result
 
     def _embedding_lookup(self, has_alignment, pred_classes, pred_masks,
                           scenes, noc_points, shape_code):
