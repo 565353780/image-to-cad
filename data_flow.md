@@ -111,6 +111,7 @@ mask_pred, pos_cads[train] -> retrieval_masks
 shape_code, pos_cads[train] -> retrieval_shape_code
 nocs, pos_cads[train] -> retrieval_noc_points
 raw_nocs, mask_probs / rot_pred, roi_mask_depth_points, mask_pred, scales_pred, trans_pred -> retrieval_noc_points
-inputs.batched_inputs -> inputs.scenes
+inputs.batched_inputs, alignment_instance_sizes, alignment_classes, mask_pred, retrieval_noc_points, shape_code -> cad_ids, pred_indices
+alignment_instances -> retrieval_pos_cads, retrieval_neg_cads
 ```
 
