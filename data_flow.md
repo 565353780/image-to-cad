@@ -27,13 +27,6 @@ inputs.images, features, inputs.gt_instances[train] -> proposals
 proposals, inputs.gt_instances[train]/features[infer] -> instances
 ```
 
-#### DepthHead
-
-```bash
-inputs.batched_inputs -> inputs.image_depths[train]
-features -> depth_features -> depths
-```
-
 #### mask
 
 ```bash
@@ -45,6 +38,13 @@ pool_boxes, alignment_features -> xy_grid, xy_grid_n
 alignment_features -> mask_logits -> mask_probs -> mask_pred
 alignment_instances -> gt_classes -> class_weights
 alignment_instances, xy_grid_n -> mask_gt
+```
+
+#### DepthHead
+
+```bash
+inputs.batched_inputs -> inputs.image_depths[train]
+features -> depth_features -> depths
 ```
 
 #### AlignmentHead
