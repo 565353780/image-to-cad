@@ -48,11 +48,9 @@ class DepthHead(nn.Module):
             for batched_input in data['inputs']['batched_inputs']:
                 image_depths.append(batched_input.pop('image_depth'))
             data['inputs']['image_depths'] = torch.cat(image_depths, dim=0).to(self.device)
+            assert data['inputs']['image_depths'] is not None
         else:
             data['inputs']['image_depths'] = None
-
-        if self.training:
-            assert data['inputs']['image_depths'] is not None
 
         if self.training:
             mask = data['inputs']['image_depths'] > 1e-5

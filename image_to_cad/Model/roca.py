@@ -68,6 +68,7 @@ class ROCA(nn.Module):
         if self.training:
             data['inputs']['gt_instances'] = [
                 x['instances'].to(self.device) for x in data['inputs']['batched_inputs']]
+            assert data['inputs']['gt_instances']
         else:
             data['inputs']['gt_instances'] = None
 

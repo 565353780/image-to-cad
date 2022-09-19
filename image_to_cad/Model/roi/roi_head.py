@@ -60,35 +60,20 @@ class ROCAROIHeads(StandardROIHeads):
         self.box_predictor.set_class_weights(self.class_weights)
 
         if self.training:
-            data['inputs']['targets'] = data['inputs']['gt_instances']
-        else:
-            data['inputs']['targets'] = [
-                {'intrinsics': input['intrinsics'].to(self.device)}
-                for input in data['inputs']['batched_inputs']]
-
-        if self.training:
-            assert data['inputs']['targets']
-
-        if self.training:
-            data['predictions']['label_and_sample_proposals'] = self.label_and_sample_proposals(
+            data['predictions']['instances'] = self.label_and_sample_proposals(
                 data['predictions']['proposals'],
-                data['inputs']['targets']
+                data['inputs']['gt_instances']
             )
-        else:
-            data['predictions']['label_and_sample_proposals'] = data['predictions']['proposals']
-
-        if self.training:
-            data['predictions']['instances'] = data['predictions']['label_and_sample_proposals']
 
             box_losses = self._forward_box(
                 data['predictions']['features'],
-                data['predictions']['label_and_sample_proposals']
+                data['predictions']['instances']
             )
             data['losses'].update(box_losses)
         else:
             data['predictions']['instances'] = self._forward_box(
                 data['predictions']['features'],
-                data['predictions']['label_and_sample_proposals']
+                data['predictions']['proposals']
             )
         return data
 
@@ -98,13 +83,11 @@ class ROCAROIHeads(StandardROIHeads):
                 data['predictions']['instances'],
                 self.num_classes
             )
+            assert data['predictions']['alignment_instances'] is not None
         else:
             score_flt = [p.scores >= self.test_min_score for p in data['predictions']['instances']]
             data['predictions']['alignment_instances'] = \
                 [p[flt] for p, flt in zip(data['predictions']['instances'], score_flt)]
-
-        if self.training:
-            assert data['predictions']['alignment_instances'] is not None
 
         if self.training:
             data['predictions']['pool_boxes'] = \
@@ -121,12 +104,12 @@ class ROCAROIHeads(StandardROIHeads):
 
         mask_logits = self.mask_head.layers(data['predictions']['alignment_features'])
 
-        data['inputs']['image_size'] = data['inputs']['images'][0].shape[-2:]
+        image_size = data['inputs']['images'][0].shape[-2:]
 
         # Create xy-grids for back-projection and cropping, respectively
         data['predictions']['xy_grid'], data['predictions']['xy_grid_n'] = create_xy_grids(
             Boxes.cat(data['predictions']['pool_boxes']),
-            data['inputs']['image_size'],
+            image_size,
             data['predictions']['alignment_features'].size(0),
             self.output_grid_size
         )

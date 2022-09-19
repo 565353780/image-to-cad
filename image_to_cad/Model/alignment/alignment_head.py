@@ -118,12 +118,14 @@ class AlignmentHead(nn.Module):
         return predictions
 
     def encode_shape(self, data):
+        image_size = data['inputs']['images'][0].shape[-2:]
+
         scaled_boxes = []
         for b in data['predictions']['pool_boxes']:
             b = Boxes(b.tensor.detach().clone())
             b.scale(
-                data['predictions']['depth_features'].shape[-1] / data['inputs']['image_size'][-1],
-                data['predictions']['depth_features'].shape[-2] / data['inputs']['image_size'][-2]
+                data['predictions']['depth_features'].shape[-1] / image_size[-1],
+                data['predictions']['depth_features'].shape[-2] / image_size[-2]
             )
             scaled_boxes.append(b.tensor)
 
@@ -177,7 +179,10 @@ class AlignmentHead(nn.Module):
         if self.training:
             data['inputs']['inference_args'] = None
         else:
-            data['inputs']['inference_args'] = data['inputs']['targets']
+            data['inputs']['inference_args'] = [
+                {'intrinsics': input['intrinsics'].to(self.device)}
+                for input in data['inputs']['batched_inputs']
+            ]
 
         data['predictions']['alignment_sizes'] = torch.tensor(
             data['predictions']['alignment_instance_sizes'], device=self.device)
