@@ -135,6 +135,8 @@ class RetrievalHead(nn.Module):
         if self.training:
             pos_cads = L.cat([p.gt_pos_cads for p in data['predictions']['alignment_instances']])
             neg_cads = L.cat([p.gt_neg_cads for p in data['predictions']['alignment_instances']])
+            assert pos_cads is not None
+            assert neg_cads is not None
             # TODO: make this configurable
             sample = torch.randperm(pos_cads.size(0))[:32]
 
@@ -159,63 +161,55 @@ class RetrievalHead(nn.Module):
                     data['predictions']['trans_pred']
                 )
 
-        if self.training:
-            data['inputs']['scenes'] = None
-        else:
+        if not self.training:
             data['inputs']['scenes'] = [batched_input['scene'] for batched_input in data['inputs']['batched_inputs']]
             if self.has_cads:
                 assert data['inputs']['scenes'] is not None
 
-        num_instances = sum(data['predictions']['alignment_instance_sizes'])
-        data['predictions']['has_alignment'] = torch.ones(num_instances, dtype=torch.bool)
-
-        if self.training:
-            data['predictions']['cad_ids'] = None
-            data['predictions']['pred_indices'] = None
-        else:
+        if not self.training:
             scenes = list(chain(*(
                 [scene] * isize
                 for scene, isize in zip(data['inputs']['scenes'], data['predictions']['alignment_instance_sizes'])
             )))
 
-            cad_ids, pred_indices = self._embedding_lookup(
-                data['predictions']['has_alignment'],
+            num_instances = sum(data['predictions']['alignment_instance_sizes'])
+            has_alignment = torch.ones(num_instances, dtype=torch.bool)
+
+            data['predictions']['cad_ids'], data['predictions']['pred_indices'] = self._embedding_lookup(
+                has_alignment,
                 data['predictions']['alignment_classes'],
                 data['predictions']['mask_pred'],
                 scenes,
                 data['predictions']['retrieval_noc_points'],
                 shape_code=data['predictions']['shape_code'],
             )
-            data['predictions']['cad_ids'] = cad_ids
-            data['predictions']['pred_indices'] = pred_indices
 
         if self.training:
             data['predictions']['retrieval_pos_cads'] = pos_cads[sample]
             data['predictions']['retrieval_neg_cads'] = neg_cads[sample]
-            assert data['predictions']['retrieval_pos_cads'] is not None
-            assert data['predictions']['retrieval_neg_cads'] is not None
-        else:
-            data['predictions']['retrieval_pos_cads'] = None
-            data['predictions']['retrieval_neg_cads'] = None
 
         if self.training:
-            noc_embed = self.embed_nocs(
-                shape_code=data['predictions']['retrieval_shape_code'],
-                noc_points=data['predictions']['retrieval_noc_points'],
-                mask=data['predictions']['retrieval_masks']
-            )
-            if isinstance(noc_embed, tuple):  # Completion
-                noc_embed, noc_comp = noc_embed
-                data['losses']['loss_noc_comp'] = self.comp_loss(
-                    noc_comp, data['predictions']['retrieval_pos_cads'].to(dtype=noc_comp.dtype)
-                )
+            data = self.retrieval_loss(data)
+        return data
 
-            cad_embeds = self.embed_cads(torch.cat([
-                data['predictions']['retrieval_pos_cads'],
-                data['predictions']['retrieval_neg_cads']
-            ]))
-            pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
-            data['losses']['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
+    def retrieval_loss(self, data):
+        noc_embed = self.embed_nocs(
+            shape_code=data['predictions']['retrieval_shape_code'],
+            noc_points=data['predictions']['retrieval_noc_points'],
+            mask=data['predictions']['retrieval_masks']
+        )
+        if isinstance(noc_embed, tuple):  # Completion
+            noc_embed, noc_comp = noc_embed
+            data['losses']['loss_noc_comp'] = self.comp_loss(
+                noc_comp, data['predictions']['retrieval_pos_cads'].to(dtype=noc_comp.dtype)
+            )
+
+        cad_embeds = self.embed_cads(torch.cat([
+            data['predictions']['retrieval_pos_cads'],
+            data['predictions']['retrieval_neg_cads']
+        ]))
+        pos_embed, neg_embed = torch.chunk(cad_embeds, 2)
+        data['losses']['loss_triplet'] = self.loss(noc_embed, pos_embed, neg_embed)
         return data
 
     def embed_nocs(self, shape_code=None, noc_points=None, mask=None):
