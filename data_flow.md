@@ -94,5 +94,16 @@ alignment_instances -> rot_gt
 depth_points, trans_pred -> proc_trans_depth_points
 shape_code, proc_trans_depth_points, scales_pred -> raw_nocs
 raw_nocs, mask_pred -> nocs
+mask_pred -> proc_has_enough
+nocs, proc_trans_depth_points, noc_codes, alignment_classes, proc_has_enough, scales_pred, mask_pred, mask_probs -> proc_solve_rot, proc_solve_trs
+proc_solve_trs, proc_has_enough -> trans_pred(update)
+proc_solve_rot, proc_has_enough -> rot_pred
+```
+
+### RetrievalHead
+
+```bash
+
+
 ```
 
