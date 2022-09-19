@@ -44,7 +44,9 @@ predictions.features -> predictions.depth_features
 #### mask
 
 ```bash
-predictions.instances -> predictions.alignment_instances -> predictions.pool_boxes
-predictions.features -> predictions.alignment_features
+predictions.instances -> predictions.alignment_instances -> predictions.pool_boxes -> predictions.alignment_features
+predictions.instances -> predictions.alignment_instances -> predictions.pool_boxes -> xy_grid, xy_grid_n
+predictions.instances -> predictions.alignment_instances -> gt_classes
+predictions.features -> predictions.alignment_features -> xy_grid, xy_grid_n
 ```
 
