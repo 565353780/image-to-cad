@@ -149,31 +149,28 @@ class AlignmentHead(nn.Module):
             pred_classes = [x.pred_classes for x in data['predictions']['alignment_instances']]
             data['predictions']['alignment_classes'] = L.cat(pred_classes)
 
-        scales = select_classes(
+        data['predictions']['scales_pred'] = select_classes(
             self.scale_head(data['predictions']['shape_code']),
             self.num_classes,
             data['predictions']['alignment_classes']
         )
-        data['predictions']['scales_pred'] = scales
 
         if self.training:
             data['predictions']['scales_gt'] = \
                 Scales.cat([p.gt_scales for p in data['predictions']['alignment_instances']]).tensor
-            data['losses']['loss_scale'] = l1_loss(
-                scales,
-                data['predictions']['scales_gt'],
-                weights=data['predictions']['class_weights']
-            )
-        else:
-            data['predictions']['scales_gt'] = None
+            assert data['predictions']['scales_gt'] is not None
+            data = self.scale_loss(data)
+        return data
 
+    def scale_loss(self, data):
+        data['losses']['loss_scale'] = l1_loss(
+            data['predictions']['scales_pred'],
+            data['predictions']['scales_gt'],
+            weights=data['predictions']['class_weights']
+        )
         return data
 
     def forward_roi_depth(self, data):
-        if self.training:
-            assert data['predictions']['mask_gt'] is not None
-            assert data['inputs']['image_depths'] is not None
-
         data['predictions']['alignment_sizes'] = torch.tensor(
             data['predictions']['alignment_instance_sizes'], device=self.device)
 
@@ -208,24 +205,26 @@ class AlignmentHead(nn.Module):
             data['predictions']['roi_depth_points'] * data['predictions']['mask_pred']
 
         if self.training:
+            data['predictions']['roi_gt_depths'], data['predictions']['roi_gt_depth_points'] = self.crop_and_project_depth(
+                data['predictions']['xy_grid'],
+                data['inputs']['image_depths'],
+                data['predictions']['intrinsics'],
+                data['predictions']['xy_grid_n'],
+                data['predictions']['alignment_sizes'],
+            )
+
             data['predictions']['roi_mask_gt_depths'] = \
                 data['predictions']['roi_gt_depths'] * data['predictions']['mask_gt']
             data['predictions']['roi_mask_gt_depth_points'] = \
                 data['predictions']['roi_gt_depth_points'] * data['predictions']['mask_gt']
+            assert data['predictions']['roi_mask_gt_depths'] is not None
+            assert data['predictions']['roi_mask_gt_depth_points'] is not None
 
         if self.training:
             data = self.roi_depth_loss(data)
         return data
 
     def roi_depth_loss(self, data):
-        data['predictions']['roi_gt_depths'], data['predictions']['roi_gt_depth_points'] = self.crop_and_project_depth(
-            data['predictions']['xy_grid'],
-            data['inputs']['image_depths'],
-            data['predictions']['intrinsics'],
-            data['predictions']['xy_grid_n'],
-            data['predictions']['alignment_sizes'],
-        )
-
         data['losses']['loss_roi_depth'] = masked_l1_loss(
             data['predictions']['roi_depths'],
             data['predictions']['roi_gt_depths'],
@@ -284,11 +283,6 @@ class AlignmentHead(nn.Module):
         return depths, depth_points
 
     def forward_trans(self, data):
-        if self.training:
-            assert data['predictions']['alignment_instances'] is not None
-            assert data['predictions']['roi_mask_gt_depth_points'] is not None
-            assert data['predictions']['roi_mask_gt_depths'] is not None
-
         depth_center, depth_min, depth_max = depth_bbox_center(
             data['predictions']['roi_mask_depth_points'],
             data['predictions']['roi_mask_depths']
@@ -300,7 +294,6 @@ class AlignmentHead(nn.Module):
         )
 
         trans_offset = self.trans_head(trans_code)
-
         # per_category_trans:
         trans_offset = select_classes(
             trans_offset,
@@ -313,31 +306,36 @@ class AlignmentHead(nn.Module):
         if self.training:
             data['predictions']['trans_gt'] = Translations.cat(
                 [p.gt_translations for p in data['predictions']['alignment_instances']]).tensor
-        else:
-            data['predictions']['trans_gt'] = None
+            assert data['predictions']['trans_gt'] is not None
+            data = self.trans_loss(data)
+        return data
 
-        if self.training:
-            depth_min_gt, depth_max_gt = depth_bbox(
-                data['predictions']['roi_mask_gt_depth_points'],
-                data['predictions']['roi_mask_gt_depths'])
+    def trans_loss(self, data):
+        _, depth_min, depth_max = depth_bbox_center(
+            data['predictions']['roi_mask_depth_points'],
+            data['predictions']['roi_mask_depths']
+        )
+        depth_min_gt, depth_max_gt = depth_bbox(
+            data['predictions']['roi_mask_gt_depth_points'],
+            data['predictions']['roi_mask_gt_depths'])
 
-            data['losses']['loss_depth_min'] = smooth_l1_loss(
-                depth_min,
-                depth_min_gt,
-                weights=data['predictions']['class_weights']
-            )
+        data['losses']['loss_depth_min'] = smooth_l1_loss(
+            depth_min,
+            depth_min_gt,
+            weights=data['predictions']['class_weights']
+        )
 
-            data['losses']['loss_depth_max'] = smooth_l1_loss(
-                depth_max,
-                depth_max_gt,
-                weights=data['predictions']['class_weights']
-            )
+        data['losses']['loss_depth_max'] = smooth_l1_loss(
+            depth_max,
+            depth_max_gt,
+            weights=data['predictions']['class_weights']
+        )
 
-            data['losses']['loss_trans'] = l2_loss(
-                data['predictions']['trans_pred'],
-                data['predictions']['trans_gt'],
-                weights=data['predictions']['class_weights']
-            )
+        data['losses']['loss_trans'] = l2_loss(
+            data['predictions']['trans_pred'],
+            data['predictions']['trans_gt'],
+            weights=data['predictions']['class_weights']
+        )
         return data
 
     def forward_proc(self, data):
@@ -349,15 +347,7 @@ class AlignmentHead(nn.Module):
         if self.training:
             data['predictions']['rot_gt'] = Rotations.cat(
                 [p.gt_rotations for p in data['predictions']['alignment_instances']]).tensor
-        else:
-            data['predictions']['rot_gt'] = None
-
-        if self.training:
-            assert data['predictions']['roi_mask_gt_depth_points'] is not None
-            assert data['predictions']['mask_gt'] is not None
-            assert data['predictions']['trans_gt'] is not None
             assert data['predictions']['rot_gt'] is not None
-            assert data['predictions']['scales_gt'] is not None
 
         # Untranslate depth using trans
         #  depth_points = inverse_transform(
@@ -366,7 +356,7 @@ class AlignmentHead(nn.Module):
             #  trans=data['predictions']['trans_pred']
         #  )
 
-        depth_points = inverse_transform(
+        data['predictions']['proc_trans_depth_points'] = inverse_transform(
             data['predictions']['depth_points'],
             trans=data['predictions']['trans_pred']
         )
@@ -374,7 +364,7 @@ class AlignmentHead(nn.Module):
         # Compute the nocs
         noc_codes = self.encode_shape_grid(
             data['predictions']['shape_code'],
-            depth_points,
+            data['predictions']['proc_trans_depth_points'],
             data['predictions']['scales_pred'],
         )
 
@@ -382,64 +372,90 @@ class AlignmentHead(nn.Module):
         data['predictions']['nocs'] = \
             data['predictions']['mask_pred'] * data['predictions']['raw_nocs']
 
-        # Perform procrustes steps to sufficiently large regions
-        has_enough = data['predictions']['mask_pred'].flatten(1).sum(-1) >= self.min_nocs
-        do_proc = has_enough.any()
+        device = data['predictions']['nocs'].device
+        print(device)
 
-        rot, trs = None, None
+        if self.training:
+            data = self.noc_loss(data)
+
+        # Perform procrustes steps to sufficiently large regions
+        data['predictions']['proc_has_enough'] = \
+            data['predictions']['mask_pred'].flatten(1).sum(-1) >= self.min_nocs
+        do_proc = data['predictions']['proc_has_enough'].any()
+        print("do_proc")
+        print(do_proc)
+
         if do_proc:
-            rot, trs = self.solve_proc(
+            rot, data['predictions']['proc_solve_trs'] = self.solve_proc(
                 data['predictions']['nocs'],
-                depth_points,
+                data['predictions']['proc_trans_depth_points'],
                 noc_codes,
                 data['predictions']['alignment_classes'],
-                has_enough,
+                data['predictions']['proc_has_enough'],
                 data['predictions']['scales_pred'],
                 data['predictions']['mask_pred'],
                 data['predictions']['mask_probs']
             )
+            data['predictions']['proc_solve_rot'] = rot
 
-        if self.training:
-            gt_rot = Rotations(data['predictions']['rot_gt']).as_rotation_matrices()
-            gt_nocs = inverse_transform(
-                data['predictions']['roi_mask_gt_depth_points'],
-                data['predictions']['mask_gt'],
-                data['predictions']['scales_gt'],
-                gt_rot.mats,
-                data['predictions']['trans_gt']
-            )
-
-            data['losses']['loss_noc'] = 3 * masked_l1_loss(
-                data['predictions']['nocs'],
-                gt_nocs,
-                torch.logical_and(data['predictions']['mask_pred'], data['predictions']['mask_gt']),
-                weights=data['predictions']['class_weights']
-            )
-
-            if do_proc:
-                if data['predictions']['class_weights'] is not None:
-                    data['predictions']['proc_class_weights'] = data['predictions']['class_weights'][has_enough]
-
-                data['losses']['loss_proc'] = 2 * l1_loss(
-                    rot.flatten(1),
-                    gt_rot.tensor[has_enough],
-                    weights=data['predictions']['proc_class_weights']
-                )
-                data['losses']['loss_trans_proc'] = l2_loss(
-                    trs + data['predictions']['trans_pred'].detach()[has_enough],
-                    data['predictions']['trans_gt'][has_enough],
-                    weights=data['predictions']['proc_class_weights']
+            if self.training:
+                data = self.proc_loss(data)
+            else:
+                data['predictions']['trans_pred'][
+                    data['predictions']['proc_has_enough']
+                ] += data['predictions']['proc_solve_trs']
+                rot = Rotations.from_rotation_matrices(data['predictions']['proc_solve_rot']).tensor
+                rot = make_new(
+                    Rotations,
+                    data['predictions']['proc_has_enough'],
+                    rot
                 )
         else:
-            if do_proc:
-                data['predictions']['trans_pred'][has_enough] += trs
-                rot = Rotations.from_rotation_matrices(rot).tensor
-                rot = make_new(Rotations, has_enough, rot)
-            else:
-                device = data['predictions']['nocs'].device
-                batch_size = has_enough.numel()
-                rot = Rotations.new_empty(batch_size, device=device).tensor
+            device = data['predictions']['nocs'].device
+            batch_size = data['predictions']['proc_has_enough'].numel()
+            rot = Rotations.new_empty(batch_size, device=device).tensor
         data['predictions']['rot_pred'] = rot
+        return data
+
+    def noc_loss(self, data):
+        gt_rot = Rotations(data['predictions']['rot_gt']).as_rotation_matrices()
+        gt_nocs = inverse_transform(
+            data['predictions']['roi_mask_gt_depth_points'],
+            data['predictions']['mask_gt'],
+            data['predictions']['scales_gt'],
+            gt_rot.mats,
+            data['predictions']['trans_gt']
+        )
+
+        data['losses']['loss_noc'] = 3 * masked_l1_loss(
+            data['predictions']['nocs'],
+            gt_nocs,
+            torch.logical_and(data['predictions']['mask_pred'],data['predictions']['mask_gt']),
+            weights=data['predictions']['class_weights']
+        )
+        return data
+
+    def proc_loss(self, data):
+        gt_rot = Rotations(data['predictions']['rot_gt']).as_rotation_matrices()
+
+        proc_class_weights = data['predictions']['class_weights'][
+            data['predictions']['proc_has_enough']
+        ]
+
+        data['losses']['loss_proc'] = 2 * l1_loss(
+            data['predictions']['proc_solve_rot'].flatten(1),
+            gt_rot.tensor[data['predictions']['proc_has_enough']],
+            weights=proc_class_weights
+        )
+        data['losses']['loss_trans_proc'] = l2_loss(
+            data['predictions']['proc_solve_trs'] + data['predictions']['trans_pred'].detach()[
+                data['predictions']['proc_has_enough']
+            ],
+            data['predictions']['trans_gt'][
+                data['predictions']['proc_has_enough']
+            ],
+            weights=proc_class_weights
+        )
         return data
 
     def encode_shape_grid(self, shape_code, depth_points, scale):
