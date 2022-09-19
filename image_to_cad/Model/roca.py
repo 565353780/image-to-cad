@@ -174,6 +174,7 @@ class ROCA(nn.Module):
         )
 
         data['predictions']['mask_probs'] = torch.sigmoid(data['predictions']['mask_logits'])
+        assert data['predictions']['mask_probs'] is not None
 
         if self.training:
             data['predictions']['mask_pred'] = data['predictions']['mask_probs'] > 0.5
