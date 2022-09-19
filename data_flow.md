@@ -107,5 +107,8 @@ alignment_instances -> pos_cads, neg_cads
 mask_pred, pos_cads[train] -> retrieval_masks
 shape_code, pos_cads[train] -> retrieval_shape_code
 nocs, pos_cads[train] -> retrieval_noc_points
+raw_nocs, mask_probs / rot_pred, roi_mask_depth_points, mask_pred, scales_pred, trans_pred -> retrieval_noc_points
+inputs.batched_inputs -> inputs.scenes
+alignment_instance_sizes -> has_alignment
 ```
 
