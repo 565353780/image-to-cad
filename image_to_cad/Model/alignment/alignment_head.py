@@ -19,8 +19,6 @@ from image_to_cad.Model.alignment.shared_mlp import SharedMLP
 from image_to_cad.Loss.loss_functions import \
     l1_loss, l2_loss, masked_l1_loss, smooth_l1_loss
 
-from image_to_cad.Metric.logging_metrics import depth_metrics
-
 from image_to_cad.Method.common_ops import select_classes
 from image_to_cad.Method.alignment_ops import \
     back_project, depth_bbox, depth_bbox_center, inverse_transform, \

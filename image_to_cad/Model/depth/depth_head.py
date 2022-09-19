@@ -4,14 +4,14 @@
 import torch
 import torch.nn as nn
 
+from image_to_cad.Model.depth.depth_features import DepthFeatures
+from image_to_cad.Model.depth.depth_output import DepthOutput
+from image_to_cad.Model.depth.sobel import Sobel
+
 from image_to_cad.Loss.loss_functions import \
     cosine_distance, inverse_huber_loss
 
 from image_to_cad.Metric.logging_metrics import depth_metrics
-
-from image_to_cad.Model.depth.depth_features import DepthFeatures
-from image_to_cad.Model.depth.depth_output import DepthOutput
-from image_to_cad.Model.depth.sobel import Sobel
 
 class DepthHead(nn.Module):
     def __init__(self, cfg, in_features):
@@ -80,10 +80,7 @@ class DepthHead(nn.Module):
         return data
 
     def loss(self, data):
-        if data['inputs']['image_depths'] is None:
-            print("[WARN][DepthHead::loss]")
-            print("\t data['inputs']['image_depths'] not exist!")
-            return data
+        assert data['inputs']['image_depths'] is not None
 
         mask = data['inputs']['image_depths'] > 1e-5
         flt = mask.flatten(1).any(1)
@@ -120,18 +117,16 @@ class DepthHead(nn.Module):
                 grady_pred, grady_gt,
                 mask, mask_inputs=False)
 
-            # Normal consistency loss
-            # https://github.com/JunjH/Revisiting_Single_Depth_Estimation/blob/master/train.py
             ones = torch.ones_like(gradx_pred)
             normal_pred = torch.cat([-gradx_pred, -grady_pred, ones], 1)
             normal_gt = torch.cat([-gradx_gt, -grady_gt, ones], 1)
             data['losses']['loss_normal'] = 5 * cosine_distance(
                 normal_pred, normal_gt, mask)
 
-        #FIXME: Log depth metrics to tensorboard
-        #  metric_dict = depth_metrics(
-            #  depth_pred, depth_gt,
-            #  mask, mask_inputs=False,
-            #  pref='depth/image_')
+        depth_metric_dict = depth_metrics(
+            depth_pred, depth_gt,
+            mask, mask_inputs=False,
+            pref='depth/image_')
+        data['logs'].update(depth_metric_dict)
         return data
 
