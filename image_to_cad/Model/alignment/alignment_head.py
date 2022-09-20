@@ -27,7 +27,7 @@ from image_to_cad.Method.alignment_ops import \
 from image_to_cad.Metric.logging_metrics import depth_metrics
 
 class AlignmentHead(nn.Module):
-    def __init__(self, cfg, num_classes, input_channels):
+    def __init__(self, num_classes, input_channels):
         super().__init__()
         self.device = torch.device("cuda")
 
@@ -62,7 +62,7 @@ class AlignmentHead(nn.Module):
             3 * self.num_classes,
             num_hiddens=1)
 
-        self.min_nocs = cfg.MODEL.ROI_HEADS.NOC_MIN
+        self.min_nocs = 16
 
         # code + depth_points + scale + embedding
         noc_code_size = shape_code_size + 3 + 3 + 0

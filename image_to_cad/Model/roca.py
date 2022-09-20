@@ -29,12 +29,9 @@ class ROCA(nn.Module):
         self.backbone = build_resnet_fpn_backbone(cfg, input_shape)
         self.proposal_generator = RPN(cfg, self.backbone.output_shape())
         self.roi_head = ROIHead(cfg, self.backbone.output_shape())
-        self.depth_head = DepthHead(cfg, self.roi_head.in_features)
-        self.alignment_head = AlignmentHead(cfg, self.roi_head.num_classes, self.depth_head.out_channels)
+        self.depth_head = DepthHead(self.roi_head.in_features)
+        self.alignment_head = AlignmentHead(self.roi_head.num_classes, self.depth_head.out_channels)
         self.retrieval_head = RetrievalHead()
-
-        self.output_grid_size = 32
-        self.test_min_score = cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST
 
         pixel_mean = cfg.MODEL.PIXEL_MEAN
         pixel_std = cfg.MODEL.PIXEL_STD

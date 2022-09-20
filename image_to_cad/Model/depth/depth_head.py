@@ -4,6 +4,8 @@
 import torch
 import torch.nn as nn
 
+from image_to_cad.Config.roca.constants import IMAGE_SIZE
+
 from image_to_cad.Model.depth.depth_features import DepthFeatures
 from image_to_cad.Model.depth.depth_output import DepthOutput
 
@@ -12,24 +14,22 @@ from image_to_cad.Loss.loss_functions import inverse_huber_loss
 from image_to_cad.Metric.logging_metrics import depth_metrics
 
 class DepthHead(nn.Module):
-    def __init__(self, cfg, in_features):
+    def __init__(self, in_features):
         super().__init__()
         self.device = torch.device("cuda")
         self.in_features = in_features
 
         # FIXME: This calculation must change if resizing!
-        # depth_width = cfg.INPUT.DEPTH_RES[-1]
+        # depth_width = IMAGE_SIZE[-1]
         # up_ratio = depth_width / 160
         up_ratio = 4
-        feat_size = tuple(d // up_ratio for d in cfg.INPUT.DEPTH_RES)
+        feat_size = tuple(d // up_ratio for d in IMAGE_SIZE)
 
         self.fpn_depth_features = DepthFeatures(size=feat_size)
         self.fpn_depth_output = DepthOutput(
             self.fpn_depth_features.out_channels,
             up_ratio
         )
-
-        self.use_batch_average = cfg.MODEL.DEPTH_BATCH_AVERAGE
         return
 
     @property
@@ -92,7 +92,7 @@ class DepthHead(nn.Module):
         data['losses']['loss_image_depth'] = inverse_huber_loss(
             depth_pred, depth_gt,
             mask, mask_inputs=False,
-            instance_average=self.use_batch_average)
+            instance_average=False)
 
         depth_metric_dict = depth_metrics(
             depth_pred, depth_gt,

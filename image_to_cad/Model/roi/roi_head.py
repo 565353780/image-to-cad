@@ -34,8 +34,7 @@ class ROIHead(StandardROIHeads):
             self.mask_head.deconv.out_channels, self.num_classes + 1, kernel_size=(1, 1))
 
         self.output_grid_size = 32
-
-        self.test_min_score = cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST
+        self.test_min_score = 0.5
         return
 
     def init_class_weights(self, cfg):
