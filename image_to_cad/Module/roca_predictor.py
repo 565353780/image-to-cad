@@ -74,8 +74,8 @@ class Predictor(object):
                 [0., 0., 1.]])),
             }
 
-        results, _ = self.model([inputs])
-        outputs = results[0]
+        data = self.model([inputs])
+        outputs = data['predictions']['post_results'][0]
         cad_ids = outputs['cad_ids']
         return outputs['instances'].to('cpu'), cad_ids
 
