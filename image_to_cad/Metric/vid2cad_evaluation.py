@@ -1,9 +1,17 @@
-import json
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import os
+import json
+import torch
+import quaternion  # noqa: F401
+import numpy as np
 import pickle as pkl
-from collections import Counter, defaultdict, OrderedDict
+from pandas import DataFrame, read_csv
 from copy import deepcopy
+from tabulate import tabulate
 from itertools import product
+from collections import Counter, defaultdict, OrderedDict
 from typing import (
     Any,
     Dict,
@@ -14,30 +22,23 @@ from typing import (
     Union,
 )
 
-import numpy as np
-import quaternion  # noqa: F401
-import torch
-from pandas import DataFrame, read_csv
-from tabulate import tabulate
-
 from detectron2.data import MetadataCatalog
 from detectron2.evaluation.evaluator import DatasetEvaluator
 from detectron2.structures import Instances
 
-from roca.data import CategoryCatalog
-from roca.data.constants import (
+from image_to_cad.Data.roca.category_manager import CategoryCatalog
+from image_to_cad.Config.roca.constants import (
     CAD_TAXONOMY,
     CAD_TAXONOMY_REVERSE,
     IMAGE_SIZE,
 )
-from roca.structures import Rotations
-from roca.utils.alignment_errors import (
+from image_to_cad.Data.alignment.rotations import Rotations
+from image_to_cad.Method.alignment_errors import (
     rotation_diff,
     scale_ratio,
     translation_diff,
 )
-from roca.utils.linalg import decompose_mat4, make_M_from_tqs
-
+from image_to_cad.Method.matrix import decompose_mat4, make_M_from_tqs
 
 NMS_TRANS = 0.4
 NMS_ROT = 60

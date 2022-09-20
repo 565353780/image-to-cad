@@ -1,11 +1,13 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import os
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.data.datasets import load_coco_json
 
-from roca.data.cad_manager import register_cads
-from roca.data.category_manager import register_categories
-
+from image_to_cad.Data.roca.cad_manager import register_cads
+from image_to_cad.Data.roca.category_manager import register_categories
 
 def register_scan2cad(
     name: str,

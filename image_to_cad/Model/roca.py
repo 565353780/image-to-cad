@@ -143,7 +143,7 @@ class ROCA(nn.Module):
         data = self.retrieval_head(data)
 
         data = self.postProcess(data)
-        return data['predictions']['post_results'], data['losses']
+        return data
 
     def set_train_cads(self, points, ids):
         self.retrieval_head.wild_points_by_class = points

@@ -11,18 +11,17 @@ import detectron2.data.transforms as T
 from detectron2.data import MetadataCatalog
 from detectron2.data.dataset_mapper import DatasetMapper
 
-from roca.data import CADCatalog
-from roca.data.constants import VOXEL_RES
-from roca.structures import (
-    Depths,
-    Intrinsics,
-    Masks,
-    Rotations,
-    Scales,
-    Translations,
-)
-from roca.utils.misc import make_dense_volume
+from image_to_cad.Config.roca.constants import VOXEL_RES
 
+from image_to_cad.Data.roca.cad_manager import CADCatalog
+from image_to_cad.Data.alignment.rotations import Rotations
+from image_to_cad.Data.alignment.scales import Scales
+from image_to_cad.Data.alignment.translations import Translations
+from image_to_cad.Data.camera.intrinsics import Intrinsics
+from image_to_cad.Data.coordinates.depths import Depths
+from image_to_cad.Data.masks.masks import Masks
+
+from image_to_cad.Method.misc import make_dense_volume
 
 class Mapper(DatasetMapper):
     def __init__(self, cfg, is_train: bool, dataset_name: str):

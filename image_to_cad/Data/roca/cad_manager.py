@@ -1,15 +1,16 @@
-import json
-import pickle
-from collections import defaultdict
-from itertools import chain
-from typing import Any, Dict, List, Optional, Tuple
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
+import json
 import torch
+import pickle
+from itertools import chain
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
 from pytorch3d.ops import sample_points_from_meshes
 from pytorch3d.structures import join_meshes_as_batch, Meshes
 from pytorch3d.utils import ico_sphere
-
 
 class CADManager:
 

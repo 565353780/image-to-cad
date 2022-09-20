@@ -1,7 +1,6 @@
 # Adapted from : https://github.com/facebookresearch/meshrcnn
 import torch
 
-
 def compute_ap(scores, labels, npos, device=None):
     if device is None:
         device = scores.device

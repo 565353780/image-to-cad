@@ -190,8 +190,9 @@ def demo():
     }
 
     for name in tqdm(scene_name_dict.keys()):
+        image_file_path = "./image_to_cad/Config/roca/assets/" + name + ".jpg"
         scene_name = scene_name_dict[name]
-        roca_detector.detectImageFromPath('./network/assets/' + name + '.jpg', scene_name)
+        roca_detector.detectImageFromPath(image_file_path, scene_name)
         result = roca_detector.getResultDict()
         #  roca_detector.renderResultWithProcess()
     return True

@@ -1,10 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import json
 from collections import Counter
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
-from roca.data.constants import BENCHMARK_CLASSES, CAD_TAXONOMY
-
+from image_to_cad.Config.roca.constants import BENCHMARK_CLASSES, CAD_TAXONOMY
 
 class CategoryManager:
     def __init__(self, category_json, dataset_name):

@@ -1,10 +1,10 @@
-from collections import Counter
 from math import log
+from collections import Counter
 
-from roca.config import maskrcnn_config
-from roca.data.constants import IMAGE_SIZE
-from roca.modeling import ROCA, ROCAROIHeads
-
+from image_to_cad.Config.roca.maskrcnn_config import maskrcnn_config
+from image_to_cad.Config.roca.constants import IMAGE_SIZE
+from image_to_cad.Model.roca import ROCA
+from image_to_cad.Model.roi.roi_head import ROIHead
 
 def roca_config(
     train_data: str,
@@ -88,7 +88,7 @@ def roca_config(
 
     # Set roi heads
     cfg.MODEL.META_ARCHITECTURE = ROCA.__name__
-    cfg.MODEL.ROI_HEADS.NAME = ROCAROIHeads.__name__
+    cfg.MODEL.ROI_HEADS.NAME = ROIHead.__name__
 
     cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = pooler_size
     cfg.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES = False

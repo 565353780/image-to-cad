@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-sys.path.append("./network/")
-
 import os
 import json
 import torch
@@ -18,12 +15,12 @@ from detectron2.data import \
     build_detection_train_loader, get_detection_dataset_dicts
 from detectron2.utils.events import EventStorage
 
-from network.roca.config import roca_config
-from network.roca.data import CategoryCatalog, Mapper
-from network.roca.data.datasets import register_scan2cad
-from network.roca.engine.trainer import Trainer
-
 from image_to_cad.Config.config import TRAIN_CONFIG
+from image_to_cad.Config.roca.roca_config import roca_config
+
+from image_to_cad.Data.roca.category_manager import CategoryCatalog
+from image_to_cad.Data.roca.mapper import Mapper
+from image_to_cad.Data.roca.datasets import register_scan2cad
 
 from image_to_cad.Model.roca import ROCA
 
@@ -131,22 +128,6 @@ def build_train_loader(cfg):
                                         mapper=mapper,
                                         num_workers=workers)
 
-class SourceROCATrainer(Trainer):
-    def __init__(self, config):
-        self.cfg = make_config(config)
-        setup_output_dir(config, self.cfg)
-        super().__init__(self.cfg)
-        self.resume_or_load(resume=config["resume"])
-        return
-
-    def train(self):
-        super().train()
-        return True
-
-    def eval(self):
-        super().test(self.cfg, self.model)
-        return True
-
 class ROCATrainer(object):
     def __init__(self, config):
         self.cfg = make_config(config)
@@ -219,14 +200,16 @@ class ROCATrainer(object):
         data = next(self._data_loader_iter)
 
         with EventStorage(self.iter) as self.storage:
-            _, loss_dict = self.model(data)
+            data = self.model(data)
 
-        for key, item in loss_dict.items():
+        for key, item in data['losses'].items():
             self.writer.add_scalar("train/" + key, item, self.iter)
-        train_total_loss = sum(loss_dict.values())
+        for key, item in data['logs'].items():
+            self.writer.add_scalar(key, item, self.iter)
+        train_total_loss = sum(data['losses'].values())
         self.writer.add_scalar("train/total_loss", train_total_loss, self.iter)
 
-        losses = sum(loss_dict.values())
+        losses = sum(data['losses'].values())
 
         self.optimizer.zero_grad()
         losses.backward()
@@ -239,10 +222,10 @@ class ROCATrainer(object):
             if self.do_val_step:
                 data = next(self._sample_val_iter)
                 with EventStorage(self.iter) as self.storage:
-                    _, val_loss_dict = self.model(data)
-                val_loss_dict['total_loss'] = sum(val_loss_dict.values())
+                    data = self.model(data)
+                data['losses']['total_loss'] = sum(data['losses'].values())
 
-                for key, item in val_loss_dict.items():
+                for key, item in data['losses'].items():
                     self.writer.add_scalar("val/" + key, item, self.iter)
         return True
 
@@ -256,11 +239,7 @@ class ROCATrainer(object):
 def demo():
     register_data(TRAIN_CONFIG)
 
-    #  source_roca_trainer = SourceROCATrainer(TRAIN_CONFIG)
-    #  source_roca_trainer.train()
-
     roca_trainer = ROCATrainer(TRAIN_CONFIG)
     roca_trainer.train()
-
     return True
 

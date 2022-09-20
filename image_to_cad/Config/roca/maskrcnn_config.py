@@ -1,7 +1,6 @@
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 
-
 def _set_anchors(cfg, anchor_clusters: dict, min_anchor_size: int):
     if anchor_clusters is None:
         return
@@ -15,7 +14,6 @@ def _set_anchors(cfg, anchor_clusters: dict, min_anchor_size: int):
 
     aspect_ratios = [anchor_clusters['ratio_centers']]
     cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = aspect_ratios
-
 
 def maskrcnn_config(
     train_data: str,

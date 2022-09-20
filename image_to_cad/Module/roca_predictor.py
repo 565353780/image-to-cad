@@ -1,22 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-sys.path.append("./network/")
-
 import torch
 import trimesh
 import numpy as np
 
-from network.roca.config import roca_config
-from network.roca.data import CADCatalog
-from network.roca.data.constants import CAD_TAXONOMY, COLOR_BY_CLASS
-from network.roca.data.datasets import register_scan2cad
-from network.roca.structures import Intrinsics
-
 from renderer.scan2cad_rasterizer import Rasterizer
 
+from image_to_cad.Config.roca.constants import CAD_TAXONOMY, COLOR_BY_CLASS
+from image_to_cad.Config.roca.roca_config import roca_config
+
+from image_to_cad.Data.roca.cad_manager import CADCatalog
+from image_to_cad.Data.roca.datasets import register_scan2cad
+from image_to_cad.Data.camera.intrinsics import Intrinsics
+
 from image_to_cad.Model.roca import ROCA
+
 from image_to_cad.Method.nms import getKeepList
 from image_to_cad.Method.matrix import make_M_from_tqs
 
@@ -46,7 +45,8 @@ class Predictor(object):
         self.model = model
         self.cad_manager = cad_manager
 
-        with open('./network/assets/camera.obj') as f:
+        camera_obj_file_path = "./image_to_cad/Config/roca/assets/camera.obj"
+        with open(camera_obj_file_path) as f:
             cam = trimesh.load(f, file_type='obj', force='mesh')
         cam.apply_scale(0.25)
         cam.visual.face_colors = [100, 100, 100, 255]

@@ -4,7 +4,7 @@
 import numpy as np
 from quaternion import quaternion
 
-from roca.utils.linalg import make_M_from_tqs
+from image_to_cad.Method.matrix import make_M_from_tqs
 
 class Trans(object):
     def __init__(self, translation=[0.0, 0.0, 0.0],

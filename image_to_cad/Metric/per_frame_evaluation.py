@@ -1,24 +1,28 @@
-import json
-import os
-from collections import defaultdict, OrderedDict
-from itertools import chain
-from typing import Any, Dict, List, OrderedDict as OrderedDictType
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
+import os
+import json
+import torch
 import cv2 as cv
 import numpy as np
 import pycocotools.mask as mask_util
-import torch
 from tabulate import tabulate
+from itertools import chain
+from collections import defaultdict, OrderedDict
+from typing import Any, Dict, List, OrderedDict as OrderedDictType
 
 from detectron2.data import MetadataCatalog
 from detectron2.evaluation import DatasetEvaluator
 from detectron2.structures import Boxes, BoxMode, pairwise_iou
 
-from roca.data import CADCatalog, CategoryCatalog
-from roca.modeling.loss_functions import masked_l1_loss
-from roca.structures import Depths
-from roca.utils.ap import compute_ap
+from image_to_cad.Data.roca.cad_manager import CADCatalog
+from image_to_cad.Data.roca.category_manager import CategoryCatalog
+from image_to_cad.Data.coordinates.depths import Depths
 
+from image_to_cad.Method.ap import compute_ap
+
+from image_to_cad.Loss.loss_functions import masked_l1_loss
 
 class InstanceEvaluator(DatasetEvaluator):
     def __init__(self, dataset_name: str, cfg, thresh=0.5):
