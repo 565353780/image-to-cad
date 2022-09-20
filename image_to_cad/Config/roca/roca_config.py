@@ -28,10 +28,8 @@ def roca_config(
     steps=[60000], #  steps=[60000, 80000],
     random_flip: bool = False,
     color_jitter: bool = False,
-    pooler_size: int = 16,
     batch_average=False,
     depth_res: tuple = IMAGE_SIZE,
-    per_category_mask=True,
     min_nocs: int = 4*4,
     per_category_noc=False,
     noc_weights=True,
@@ -78,15 +76,8 @@ def roca_config(
     cfg.INPUT.DEPTH_RES = depth_res
     cfg.INPUT.AUGMENT = augment
 
-    # Set roi heads
-    cfg.MODEL.META_ARCHITECTURE = ROCA.__name__
-    cfg.MODEL.ROI_HEADS.NAME = ROIHead.__name__
-
-    cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = pooler_size
-    cfg.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES = False
-    # NOTE: below is different from non-class-agnostic mask
-    # as all non-cad/non-benchmark classes share a single output
-    cfg.MODEL.ROI_HEADS.PER_CATEGORY_MASK = per_category_mask
+    #FIXME: can not remove this
+    cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION = 16
 
     cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.5
 

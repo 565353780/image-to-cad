@@ -33,7 +33,7 @@ class ROCA(nn.Module):
         self.alignment_head = AlignmentHead(cfg, self.roi_head.num_classes, self.depth_head.out_channels)
         self.retrieval_head = RetrievalHead()
 
-        self.output_grid_size = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION * 2
+        self.output_grid_size = 32
         self.test_min_score = cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST
 
         pixel_mean = cfg.MODEL.PIXEL_MEAN

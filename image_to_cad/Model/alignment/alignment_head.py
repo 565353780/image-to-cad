@@ -32,7 +32,7 @@ class AlignmentHead(nn.Module):
         self.device = torch.device("cuda")
 
         self.num_classes = num_classes
-        self.output_grid_size = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION * 2
+        self.output_grid_size = 32
 
         # Init the shape feature aggregator
         input_size = input_channels

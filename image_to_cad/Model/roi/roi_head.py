@@ -33,7 +33,7 @@ class ROIHead(StandardROIHeads):
         self.mask_head.predictor = nn.Conv2d(
             self.mask_head.deconv.out_channels, self.num_classes + 1, kernel_size=(1, 1))
 
-        self.output_grid_size = cfg.MODEL.ROI_MASK_HEAD.POOLER_RESOLUTION * 2
+        self.output_grid_size = 32
 
         self.test_min_score = cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST
         return
