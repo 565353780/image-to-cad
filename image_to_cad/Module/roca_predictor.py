@@ -45,7 +45,7 @@ class Predictor(object):
         self.model = model
         self.cad_manager = cad_manager
 
-        camera_obj_file_path = "./image_to_cad/Config/roca/assets/camera.obj"
+        camera_obj_file_path = "./image_to_cad/OBJ/camera.obj"
         with open(camera_obj_file_path) as f:
             cam = trimesh.load(f, file_type='obj', force='mesh')
         cam.apply_scale(0.25)
