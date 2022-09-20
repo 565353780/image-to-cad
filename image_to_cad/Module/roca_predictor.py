@@ -21,7 +21,7 @@ from image_to_cad.Method.matrix import make_M_from_tqs
 
 class Predictor(object):
     def __init__(self, data_dir, model_path, config_path, thresh=0.5):
-        cfg = roca_config('Scan2CAD', 'Scan2CAD')
+        cfg = roca_config()
         cfg.merge_from_file(config_path)
         cfg.MODEL.INSTANCES_CONFIDENCE_THRESH = thresh
 

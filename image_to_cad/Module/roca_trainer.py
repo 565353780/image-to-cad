@@ -53,14 +53,13 @@ def register_data(config):
 
 def make_config(config):
     cfg = roca_config(
-        num_classes=CategoryCatalog.get('Scan2CAD_train').num_classes,
-        class_freqs=CategoryCatalog.get('Scan2CAD_train').freqs,
+        CategoryCatalog.get('Scan2CAD_train').num_classes,
+        CategoryCatalog.get('Scan2CAD_train').freqs,
     )
 
     # NOTE: Training state will be reset in this case!
     if config["checkpoint"].lower() not in ('', 'none'):
         cfg.MODEL.WEIGHTS = config["checkpoint"]
-
     return cfg
 
 def build_train_loader(cfg):
@@ -74,9 +73,7 @@ def build_train_loader(cfg):
         random.seed(seed)
         np.random.seed(seed)
 
-    return build_detection_train_loader(cfg,
-                                        mapper=mapper,
-                                        num_workers=workers)
+    return build_detection_train_loader(cfg, mapper=mapper, num_workers=workers)
 
 class ROCATrainer(object):
     def __init__(self, config):
