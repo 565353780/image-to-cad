@@ -25,6 +25,7 @@ from image_to_cad.Model.roca import ROCA
 
 from image_to_cad.Method.time import getCurrentTimeStr
 
+
 def register_data(config):
     data_dir = config["data_dir"]
     train_name = 'Scan2CAD_train'
@@ -38,8 +39,7 @@ def register_data(config):
         image_root=config["image_root"],
         rendering_root=config["rendering_root"],
         full_annot=config["full_annot"],
-        class_freq_method="image"
-    )
+        class_freq_method="image")
     register_scan2cad(
         name=val_name,
         split='val',
@@ -47,20 +47,20 @@ def register_data(config):
         metadata={'scenes': path.abspath('../metadata/scannetv2_val.txt')},
         image_root=config["image_root"],
         rendering_root=config["rendering_root"],
-        full_annot=config["full_annot"]
-    )
+        full_annot=config["full_annot"])
     return
+
 
 def make_config(config):
     cfg = roca_config(
         CategoryCatalog.get('Scan2CAD_train').num_classes,
-        CategoryCatalog.get('Scan2CAD_train').freqs
-    )
+        CategoryCatalog.get('Scan2CAD_train').freqs)
 
     # NOTE: Training state will be reset in this case!
     if config["checkpoint"].lower() not in ('', 'none'):
         cfg.MODEL.WEIGHTS = config["checkpoint"]
     return cfg
+
 
 def build_train_loader(cfg):
     datasets = cfg.DATASETS.TRAIN
@@ -73,9 +73,13 @@ def build_train_loader(cfg):
         random.seed(seed)
         np.random.seed(seed)
 
-    return build_detection_train_loader(cfg, mapper=mapper, num_workers=workers)
+    return build_detection_train_loader(cfg,
+                                        mapper=mapper,
+                                        num_workers=workers)
+
 
 class ROCATrainer(object):
+
     def __init__(self, config):
         self.cfg = make_config(config)
         self.model = ROCA(self.cfg)
@@ -138,8 +142,7 @@ class ROCATrainer(object):
                 mapper=mapper,
                 dataset=dataset,
                 total_batch_size=self.cfg.SOLVER.IMS_PER_BATCH,
-                num_workers=num_workers
-            )
+                num_workers=num_workers)
             self._sample_val_iter = iter(self._sample_val_data)
         return True
 
@@ -183,10 +186,10 @@ class ROCATrainer(object):
                 self.eval_step()
         return True
 
+
 def demo():
     register_data(TRAIN_CONFIG)
 
     roca_trainer = ROCATrainer(TRAIN_CONFIG)
     roca_trainer.train()
     return True
-

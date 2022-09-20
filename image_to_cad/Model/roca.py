@@ -19,7 +19,9 @@ from image_to_cad.Model.depth.depth_head import DepthHead
 from image_to_cad.Model.alignment.alignment_head import AlignmentHead
 from image_to_cad.Model.retrieval.retrieval_head import RetrievalHead
 
+
 class ROCA(nn.Module):
+
     def __init__(self, cfg):
         super().__init__()
         self.device = torch.device("cuda")
@@ -30,11 +32,14 @@ class ROCA(nn.Module):
         self.proposal_generator = RPN(cfg, self.backbone.output_shape())
         self.roi_head = ROIHead(cfg, self.backbone.output_shape())
         self.depth_head = DepthHead(self.roi_head.in_features)
-        self.alignment_head = AlignmentHead(self.roi_head.num_classes, self.depth_head.out_channels)
+        self.alignment_head = AlignmentHead(self.roi_head.num_classes,
+                                            self.depth_head.out_channels)
         self.retrieval_head = RetrievalHead()
 
-        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
-        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
+        self.register_buffer("pixel_mean",
+                             torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
+        self.register_buffer("pixel_std",
+                             torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
         assert (
             self.pixel_mean.shape == self.pixel_std.shape
         ), f"{self.pixel_mean} and {self.pixel_std} have different shapes!"
@@ -43,7 +48,8 @@ class ROCA(nn.Module):
     def preprocess_image(self, batched_inputs):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
-        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        images = ImageList.from_tensors(images,
+                                        self.backbone.size_divisibility)
         return images
 
     @staticmethod
@@ -51,8 +57,7 @@ class ROCA(nn.Module):
         # note: private function; subject to changes
         processed_results = []
         for results_per_image, input_per_image, image_size in zip(
-            instances, batched_inputs, image_sizes
-        ):
+                instances, batched_inputs, image_sizes):
             height = input_per_image.get("height", image_size[0])
             width = input_per_image.get("width", image_size[1])
             r = detector_postprocess(results_per_image, height, width)
@@ -60,24 +65,27 @@ class ROCA(nn.Module):
         return processed_results
 
     def forward_backbone(self, data):
-        data['inputs']['images'] = self.preprocess_image(data['inputs']['batched_inputs'])
+        data['inputs']['images'] = self.preprocess_image(
+            data['inputs']['batched_inputs'])
 
-        data['predictions']['features'] = self.backbone(data['inputs']['images'].tensor)
+        data['predictions']['features'] = self.backbone(
+            data['inputs']['images'].tensor)
         return data
 
     def forward_proposals(self, data):
         if self.training:
             data['inputs']['gt_instances'] = [
-                x['instances'].to(self.device) for x in data['inputs']['batched_inputs']]
+                x['instances'].to(self.device)
+                for x in data['inputs']['batched_inputs']
+            ]
             assert data['inputs']['gt_instances']
         else:
             data['inputs']['gt_instances'] = None
 
-        data['predictions']['proposals'], proposal_losses = self.proposal_generator(
-            data['inputs']['images'],
-            data['predictions']['features'],
-            data['inputs']['gt_instances']
-        )
+        data['predictions'][
+            'proposals'], proposal_losses = self.proposal_generator(
+                data['inputs']['images'], data['predictions']['features'],
+                data['inputs']['gt_instances'])
         data['losses'].update(proposal_losses)
         return data
 
@@ -87,25 +95,28 @@ class ROCA(nn.Module):
             for name, preds in data['predictions'].items():
                 pred_list = None
                 try:
-                    pred_list = preds.split(data['predictions']['alignment_instance_sizes'])
+                    pred_list = preds.split(
+                        data['predictions']['alignment_instance_sizes'])
                 except:
                     continue
-                for instance, pred in zip(data['predictions']['alignment_instances'], pred_list):
+                for instance, pred in zip(
+                        data['predictions']['alignment_instances'], pred_list):
                     setattr(instance, name, pred)
 
         if self.training:
-            data['predictions']['post_results'] = data['predictions']['alignment_instances']
+            data['predictions']['post_results'] = data['predictions'][
+                'alignment_instances']
         else:
             data['predictions']['post_results'] = self.postprocess(
                 data['predictions']['alignment_instances'],
                 data['inputs']['batched_inputs'],
-                data['inputs']['images'].image_sizes
-            )
+                data['inputs']['images'].image_sizes)
 
             # Attach image depths
             if 'depths' in data['predictions']:
                 pred_image_depths = data['predictions']['depths'].unbind(0)
-                for depth, result in zip(pred_image_depths, data['predictions']['post_results']):
+                for depth, result in zip(pred_image_depths,
+                                         data['predictions']['post_results']):
                     result['pred_image_depth'] = depth
 
             # Attach CAD ids
@@ -116,12 +127,7 @@ class ROCA(nn.Module):
         return data
 
     def forward(self, batched_inputs):
-        data = {
-            'inputs': {},
-            'predictions': {},
-            'losses': {},
-            'logs': {}
-        }
+        data = {'inputs': {}, 'predictions': {}, 'losses': {}, 'logs': {}}
 
         data['inputs']['batched_inputs'] = batched_inputs
 
@@ -155,7 +161,7 @@ class ROCA(nn.Module):
             points=points,
             ids=ids,
             scene_data=scene_data,
-            device='cpu' #FIXME: why use cpu?
+            device='cpu'  #FIXME: why use cpu?
         )
         return
 
@@ -174,12 +180,11 @@ class ROCA(nn.Module):
             total_size = len(points)
             for i in range(0, total_size, batch_size):
                 points_i = points[i:min(i + batch_size, total_size)]
-                points_i = torch.stack([
-                    make_dense_volume(p, VOXEL_RES) for p in points_i
-                ])
+                points_i = torch.stack(
+                    [make_dense_volume(p, VOXEL_RES) for p in points_i])
                 embeds.append(
-                    self.retrieval_head.cad_net(points_i.to(self.device).float()).cpu()
-                )
+                    self.retrieval_head.cad_net(
+                        points_i.to(self.device).float()).cpu())
 
             points_by_class[cat] = torch.cat(embeds).to(self.device)
             del embeds
@@ -190,4 +195,3 @@ class ROCA(nn.Module):
         if 'inject' in k or 'eject' in k or k == 'set_verbose':
             return getattr(self.roi_head, k)
         return super().__getattr__(k)
-
