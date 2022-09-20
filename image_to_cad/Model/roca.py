@@ -33,10 +33,8 @@ class ROCA(nn.Module):
         self.alignment_head = AlignmentHead(self.roi_head.num_classes, self.depth_head.out_channels)
         self.retrieval_head = RetrievalHead()
 
-        pixel_mean = cfg.MODEL.PIXEL_MEAN
-        pixel_std = cfg.MODEL.PIXEL_STD
-        self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1))
-        self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1))
+        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
+        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
         assert (
             self.pixel_mean.shape == self.pixel_std.shape
         ), f"{self.pixel_mean} and {self.pixel_std} have different shapes!"
