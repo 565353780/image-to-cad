@@ -38,7 +38,7 @@ def register_data(config):
         image_root=config["image_root"],
         rendering_root=config["rendering_root"],
         full_annot=config["full_annot"],
-        class_freq_method=config["freq_scale"]
+        class_freq_method="image"
     )
     register_scan2cad(
         name=val_name,

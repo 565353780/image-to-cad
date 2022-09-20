@@ -6,7 +6,7 @@ from collections import Counter
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 
-from image_to_cad.Config.roca.constants import BENCHMARK_CLASSES, CAD_TAXONOMY
+from image_to_cad.Config.roca.constants import BENCHMARK_CLASSES
 
 class CategoryManager:
     def __init__(self, category_json, dataset_name):
@@ -44,26 +44,17 @@ class CategoryManager:
     def get_id(self, name) -> str:
         return self._name_to_id[name]
 
-    def set_freqs(self, class_freq_method: str = 'none'):
+    def set_freqs(self, class_freq_method='none'):
         if class_freq_method == 'none':
             return
         self.freqs = Counter()
-        if class_freq_method == 'cad':
-            with open(self._metadata.full_annot) as f:
-                data = json.load(f)
-            for scene in data:
-                models = scene['aligned_models']
-                model_cats = (int(m['catid_cad']) for m in models)
-                model_cats = (c for c in model_cats if c in CAD_TAXONOMY)
-                model_cats = (self.get_id(CAD_TAXONOMY[c]) for c in model_cats)
-                self.freqs.update(model_cats)
-        else:
-            data = DatasetCatalog.get(self.dataset_name)
-            for record in data:
-                if 'annotations' in record:
-                    for annot in record['annotations']:
-                        idx = self._index_to_id[annot['category_id']]
-                        self.freqs[idx] += 1
+        data = DatasetCatalog.get(self.dataset_name)
+        for record in data:
+            if 'annotations' in record:
+                for annot in record['annotations']:
+                    idx = self._index_to_id[annot['category_id']]
+                    self.freqs[idx] += 1
+        return
 
 class CategoryCatalog:
     _managers = {}
