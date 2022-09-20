@@ -7,17 +7,17 @@ from image_to_cad.Model.roca import ROCA
 from image_to_cad.Model.roi.roi_head import ROIHead
 
 def roca_config(
-    train_data: str,
-    test_data: str,
-    batch_size: int = 2,
-    num_proposals: int = 128,
+    train_data='Scan2CAD_train',
+    test_data='Scan2CAD_val',
+    batch_size=4,
+    num_proposals=128,
     num_classes: int = 17,
-    max_iter: int = 100000,
-    lr: float = 2e-2,
-    workers: int = 0,
-    eval_period: int = 5000,
-    eval_step: bool = False,
-    output_dir: str = '',  # default
+    max_iter=100000,
+    lr=1e-3,
+    workers=0,
+    eval_period=100,
+    eval_step=False,
+    output_dir='./output/',
     base_config: str = 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_1x.yaml',
     anchor_clusters: dict = None,
     min_anchor_size: int = 64,
@@ -25,33 +25,27 @@ def roca_config(
     noc_offset=1,
     depth_scale=1000,
     class_freqs: Counter = None,
-    steps: list = [60000, 80000],
+    steps=[60000], #  steps=[60000, 80000],
     random_flip: bool = False,
     color_jitter: bool = False,
-    pooler_size: int = 14,
-    batch_average: bool = False,
-    depth_grad_losses: bool = False,
+    pooler_size: int = 16,
+    batch_average=False,
+    depth_grad_losses=False,
     depth_res: tuple = IMAGE_SIZE,
-    per_category_mask: bool = False,
-    disable_retrieval: bool = False,
+    per_category_mask=True,
     min_nocs: int = 4*4,
-    per_category_noc: bool = False,
-    noc_embed: bool = False,
-    noc_weights: bool = True,
-    per_category_trans: bool = True,
-    noc_weight_head: bool = False,
-    noc_weight_skip: bool = False,
-    noc_rot_init: bool = False,
-    seed: int = -1,
-    gclip: float = 10.0,
-    augment: bool = False,
-    zero_center: bool = False,
-    irls_iters: int = 1,
-    wild_retrieval: bool = True,
-    # retrieval_mode: str = 'nearest'
-    retrieval_mode: str = 'resnet_resnet+image+comp',
-    confidence_thresh_test: float = 0.5,
-    e2e: bool = True
+    per_category_noc=False,
+    noc_weights=True,
+    per_category_trans=True,
+    noc_weight_head=True,
+    noc_weight_skip=False,
+    noc_rot_init=False,
+    seed=2022,
+    gclip=10.0,
+    augment=True,
+    zero_center=False,
+    irls_iters=1,
+    confidence_thresh_test=0.5,
 ):
     cfg = maskrcnn_config(
         train_data=train_data,
@@ -84,7 +78,7 @@ def roca_config(
     cfg.INPUT.DEPTH_SCALE = depth_scale
     cfg.INPUT.DEPTH_RES = depth_res
     cfg.INPUT.AUGMENT = augment
-    cfg.INPUT.CAD_TYPE = _get_cad_type(retrieval_mode)
+    cfg.INPUT.CAD_TYPE = 'voxel'
 
     # Set roi heads
     cfg.MODEL.META_ARCHITECTURE = ROCA.__name__
@@ -100,7 +94,7 @@ def roca_config(
 
     cfg.MODEL.ROI_HEADS.NOC_MIN = min_nocs
     cfg.MODEL.ROI_HEADS.PER_CATEGORY_NOC = per_category_noc
-    cfg.MODEL.ROI_HEADS.NOC_EMBED = noc_embed
+    cfg.MODEL.ROI_HEADS.NOC_EMBED = False
     cfg.MODEL.ROI_HEADS.NOC_WEIGHTS = noc_weights
     cfg.MODEL.ROI_HEADS.PER_CATEGORY_TRANS = per_category_trans
     cfg.MODEL.ROI_HEADS.NOC_WEIGHT_HEAD = noc_weight_head
@@ -108,7 +102,7 @@ def roca_config(
     cfg.MODEL.ROI_HEADS.NOC_ROT_INIT = noc_rot_init
     cfg.MODEL.ROI_HEADS.ZERO_CENTER = zero_center
     cfg.MODEL.ROI_HEADS.IRLS_ITERS = irls_iters
-    cfg.MODEL.ROI_HEADS.E2E = e2e
+    cfg.MODEL.ROI_HEADS.E2E = True
 
     cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST = confidence_thresh_test
 
@@ -118,10 +112,10 @@ def roca_config(
     cfg.MODEL.DEPTH_GRAD_LOSSES = depth_grad_losses
 
     # Set retrieval config
-    cfg.MODEL.RETRIEVAL_ON = not disable_retrieval
-    cfg.MODEL.WILD_RETRIEVAL_ON = wild_retrieval
-    cfg.MODEL.RETRIEVAL_MODE = retrieval_mode
-    cfg.MODEL.RETRIEVAL_BASELINE = _is_baseline(retrieval_mode)
+    cfg.MODEL.RETRIEVAL_ON = True
+    cfg.MODEL.RETRIEVAL_MODE = 'resnet_resnet+image+comp'
+    cfg.MODEL.RETRIEVAL_BASELINE = False
+    cfg.MODEL.WILD_RETRIEVAL_ON = False
 
     # Set optimizer configuration
     cfg.SOLVER.STEPS = tuple(steps)
@@ -152,14 +146,3 @@ def roca_config(
 
     return cfg
 
-
-def _get_cad_type(retrieval_mode: str) -> str:
-    # TODO: generalize for pairs
-    if 'resnet' in retrieval_mode:
-        return 'voxel'
-    else:
-        return 'point'
-
-
-def _is_baseline(retrieval_mode: str) -> bool:
-    return retrieval_mode in ('random', 'nearest', 'first')

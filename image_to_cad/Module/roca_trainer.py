@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import json
 import torch
 import random
 import numpy as np
@@ -53,43 +52,9 @@ def register_data(config):
     return
 
 def make_config(config):
-    train_name = 'Scan2CAD_train'
-    val_name = 'Scan2CAD_val'
-
     cfg = roca_config(
-        train_data=train_name,
-        test_data=val_name,
-        batch_size=config["batch_size"],
-        num_proposals=config["num_proposals"],
-        num_classes=CategoryCatalog.get(train_name).num_classes,
-        max_iter=config["max_iter"],
-        lr=config["lr"],
-        output_dir=config["output_dir"],
-        eval_period=config["eval_period"],
-        eval_step=bool(config["eval_step"]),
-        workers=config["workers"],
-        class_freqs=CategoryCatalog.get(train_name).freqs,
-        steps=config["steps"],
-        pooler_size=config["pooler_size"],
-        batch_average=bool(config["batch_average"]),
-        depth_grad_losses=bool(config["depth_grad_losses"]),
-        per_category_mask=bool(config["per_category_mask"]),
-        per_category_noc=bool(config["per_category_noc"]),
-        noc_embed=bool(config["noc_embed"]),
-        noc_weights=bool(config["noc_weights"]),
-        per_category_trans=bool(config["per_category_trans"]),
-        noc_weight_head=bool(config["custom_noc_weights"]),
-        noc_weight_skip=bool(config["noc_weight_skip"]),
-        noc_rot_init=bool(config["noc_rot_init"]),
-        seed=config["seed"],
-        gclip=config["gclip"],
-        augment=bool(config["augment"]),
-        zero_center=bool(config["zero_center"]),
-        irls_iters=config["irls_iters"],
-        retrieval_mode=config["retrieval_mode"],
-        wild_retrieval=bool(config["wild_retrieval"]),
-        confidence_thresh_test=config["confidence_thresh_test"],
-        e2e=bool(config["e2e"])
+        num_classes=CategoryCatalog.get('Scan2CAD_train').num_classes,
+        class_freqs=CategoryCatalog.get('Scan2CAD_train').freqs,
     )
 
     # NOTE: Training state will be reset in this case!
@@ -97,21 +62,6 @@ def make_config(config):
         cfg.MODEL.WEIGHTS = config["checkpoint"]
 
     return cfg
-
-def setup_output_dir(config, cfg):
-    output_dir = config["output_dir"]
-    makedirs(output_dir, exist_ok=True)
-
-    if config["resume"]:
-        return
-
-    # Save command line arguments
-    with open(path.join(config["output_dir"], 'args.json'), 'w') as f:
-        json.dump(config, f)
-    # Save the config as yaml
-    with open(path.join(output_dir, 'config.yaml'), 'w') as f:
-        cfg.dump(stream=f)
-    return
 
 def build_train_loader(cfg):
     datasets = cfg.DATASETS.TRAIN
@@ -131,22 +81,22 @@ def build_train_loader(cfg):
 class ROCATrainer(object):
     def __init__(self, config):
         self.cfg = make_config(config)
-        setup_output_dir(config, self.cfg)
         self.model = ROCA(self.cfg)
         self.model.to(torch.device("cuda"))
         self.optimizer = build_optimizer(self.cfg, self.model)
         self.data_loader = build_train_loader(self.cfg)
         self.scheduler = build_lr_scheduler(self.cfg, self.optimizer)
 
-        output_folder_path = config["output_dir"] + "logs/" + getCurrentTimeStr() + "/"
+        output_folder_path = "./output/logs/" + getCurrentTimeStr() + "/"
+        makedirs(output_folder_path, exist_ok=True)
         os.makedirs(output_folder_path, exist_ok=True)
         self.writer = SummaryWriter(output_folder_path)
 
         self._data_loader_iter = iter(self.data_loader)
 
         self.iter = self.start_iter = 0
-        self.max_iter = config["steps"][0]
-        self.eval_period = config["eval_period"]
+        self.max_iter = 100000
+        self.eval_period = 100
 
         self.do_val_step = True
 
