@@ -193,7 +193,7 @@ def demo():
         scene_name = scene_name_dict[name]
         roca_detector.detectImageFromPath('./network/assets/' + name + '.jpg', scene_name)
         result = roca_detector.getResultDict()
-        #  roca_detector.renderResultImage()
+        #  roca_detector.renderResultWithProcess()
     return True
 
 if __name__ == '__main__':
