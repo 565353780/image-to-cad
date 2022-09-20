@@ -40,26 +40,18 @@ class Mapper(DatasetMapper):
         self.dataset_name = dataset_name
         self._metadata = MetadataCatalog.get(dataset_name)
 
-        # TODO: Better way to check baseline mode!
-        self.is_voxel = cfg.INPUT.CAD_TYPE == 'voxel'
-        self.negative_sample = (
-            cfg.MODEL.RETRIEVAL_ON
-            and not cfg.MODEL.RETRIEVAL_BASELINE
-            and self.is_train
-        )
+        self.negative_sample = self.is_train
         if self.negative_sample:
-            self._cad_points, self._cad_ids = self._points_and_ids(
-                dataset_name, self.is_voxel
-            )
+            self._cad_points, self._cad_ids = self._points_and_ids(dataset_name)
 
         if not is_train:
             self._intrinsic_cache = {}
 
     @staticmethod
-    def _points_and_ids(dataset_name: str, is_voxel=False):
+    def _points_and_ids(dataset_name):
         cad_manager = CADCatalog.get(dataset_name)
         cad_points, cad_ids = \
-            cad_manager.batched_points_and_ids(volumes=is_voxel)
+            cad_manager.batched_points_and_ids(volumes=True)
 
         cad_ids_out = {c: {} for c in cad_ids.keys()}
         for c, cad_ids_c in cad_ids.items():
@@ -239,13 +231,11 @@ class Mapper(DatasetMapper):
             neg.append(cad_points[neg_ind])
 
         # Convert to dense if using Voxels
-        if self.is_voxel:
+        def to_dense(ind):
+            return make_dense_volume(ind, VOXEL_RES)
 
-            def to_dense(ind):
-                return make_dense_volume(ind, VOXEL_RES)
-
-            pos = list(map(to_dense, pos))
-            neg = list(map(to_dense, neg))
+        pos = list(map(to_dense, pos))
+        neg = list(map(to_dense, neg))
 
         # Set GT CADs
         instances.gt_pos_cads = torch.stack(pos)
