@@ -30,7 +30,6 @@ def roca_config(
     color_jitter: bool = False,
     pooler_size: int = 16,
     batch_average=False,
-    depth_grad_losses=False,
     depth_res: tuple = IMAGE_SIZE,
     per_category_mask=True,
     min_nocs: int = 4*4,
@@ -78,7 +77,6 @@ def roca_config(
     cfg.INPUT.DEPTH_SCALE = depth_scale
     cfg.INPUT.DEPTH_RES = depth_res
     cfg.INPUT.AUGMENT = augment
-    cfg.INPUT.CAD_TYPE = 'voxel'
 
     # Set roi heads
     cfg.MODEL.META_ARCHITECTURE = ROCA.__name__
@@ -94,7 +92,6 @@ def roca_config(
 
     cfg.MODEL.ROI_HEADS.NOC_MIN = min_nocs
     cfg.MODEL.ROI_HEADS.PER_CATEGORY_NOC = per_category_noc
-    cfg.MODEL.ROI_HEADS.NOC_EMBED = False
     cfg.MODEL.ROI_HEADS.NOC_WEIGHTS = noc_weights
     cfg.MODEL.ROI_HEADS.PER_CATEGORY_TRANS = per_category_trans
     cfg.MODEL.ROI_HEADS.NOC_WEIGHT_HEAD = noc_weight_head
@@ -102,20 +99,12 @@ def roca_config(
     cfg.MODEL.ROI_HEADS.NOC_ROT_INIT = noc_rot_init
     cfg.MODEL.ROI_HEADS.ZERO_CENTER = zero_center
     cfg.MODEL.ROI_HEADS.IRLS_ITERS = irls_iters
-    cfg.MODEL.ROI_HEADS.E2E = True
 
     cfg.MODEL.ROI_HEADS.CONFIDENCE_THRESH_TEST = confidence_thresh_test
 
 
     # Set depth config
     cfg.MODEL.DEPTH_BATCH_AVERAGE = batch_average
-    cfg.MODEL.DEPTH_GRAD_LOSSES = depth_grad_losses
-
-    # Set retrieval config
-    cfg.MODEL.RETRIEVAL_ON = True
-    cfg.MODEL.RETRIEVAL_MODE = 'resnet_resnet+image+comp'
-    cfg.MODEL.RETRIEVAL_BASELINE = False
-    cfg.MODEL.WILD_RETRIEVAL_ON = False
 
     # Set optimizer configuration
     cfg.SOLVER.STEPS = tuple(steps)
