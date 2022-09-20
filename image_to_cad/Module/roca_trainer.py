@@ -54,7 +54,7 @@ def register_data(config):
 def make_config(config):
     cfg = roca_config(
         CategoryCatalog.get('Scan2CAD_train').num_classes,
-        CategoryCatalog.get('Scan2CAD_train').freqs,
+        CategoryCatalog.get('Scan2CAD_train').freqs
     )
 
     # NOTE: Training state will be reset in this case!
