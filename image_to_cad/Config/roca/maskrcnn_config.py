@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 
