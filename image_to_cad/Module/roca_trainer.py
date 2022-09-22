@@ -98,6 +98,7 @@ class ROCATrainer(object):
         self.iter = self.start_iter = 0
         self.max_iter = 100000
         self.eval_period = 100
+        self.save_period = 1000
 
         self.do_val_step = True
 
