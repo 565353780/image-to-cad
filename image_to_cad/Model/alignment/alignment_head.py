@@ -3,9 +3,6 @@
 
 import sys
 
-sys.path.append("../pytorch-3d-r2n2")
-from td_r2n2.Module.detector import TDR2N2Detector
-
 import torch
 import torch.nn as nn
 import detectron2.layers as L
@@ -83,9 +80,6 @@ class AlignmentHead(nn.Module):
             # hidden_size=512,
             output_size=self.num_classes,
             output_activation=nn.Sigmoid)
-
-        model_file_path = "/home/chli/chLi/3D-R2N2/checkpoint.pth"
-        #  self.td_r2n2_detector = TDR2N2Detector(model_file_path)
         return
 
     def identity(self):
