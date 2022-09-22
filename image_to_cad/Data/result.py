@@ -29,9 +29,9 @@ class Result(object):
             instances.pred_classes[instance_idx],
             instances.scores[instance_idx],
             Trans(
-                instances.pred_translations[instance_idx],
-                instances.pred_rotations[instance_idx],
-                instances.pred_scales[instance_idx]),
+                instances.trans_pred[instance_idx],
+                instances.rot_pred[instance_idx],
+                instances.scales_pred[instance_idx]),
             cad_ids[instance_idx],
             meshes[instance_idx])
         return instance
