@@ -6,6 +6,7 @@ import quaternion
 import numpy as np
 from pytorch3d.structures import Meshes
 
+
 def make_M_from_tqs(t: list, q: list, s: list, center=None) -> np.ndarray:
     if not isinstance(q, np.quaternion):
         q = np.quaternion(q[0], q[1], q[2], q[3])
@@ -43,16 +44,11 @@ def decompose_mat4(M: np.ndarray) -> tuple:
     return t, q, s
 
 
-def transform_mesh(
-    meshes: Meshes,
-    t: list,
-    q: np.quaternion,
-    s: list
-) -> Meshes:
+def transform_mesh(meshes: Meshes, t: list, q: np.quaternion,
+                   s: list) -> Meshes:
     assert len(meshes) == 1, 'Batched evaluation is not supported yet'
     mat = make_M_from_tqs(t, q, s)
     pts = meshes.verts_list()[0].numpy()
     pts = np.hstack([pts, np.ones((pts.shape[0], 1))])
     pts = pts @ mat.T
     return Meshes([torch.from_numpy(pts[:, :3]).float()], meshes.faces_list())
-

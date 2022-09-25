@@ -7,7 +7,9 @@ from habitat_sim_manage.Data.point import Point
 
 inf = float("inf")
 
+
 class BBox(object):
+
     def __init__(self,
                  min_point=Point(inf, inf, inf),
                  max_point=Point(-inf, -inf, -inf)):
@@ -28,10 +30,9 @@ class BBox(object):
         if not self.isValid():
             self.diff_point = Point(-inf, -inf, -inf)
             return True
-        self.diff_point = Point(
-            self.max_point.x - self.min_point.x,
-            self.max_point.y - self.min_point.y,
-            self.max_point.z - self.min_point.z)
+        self.diff_point = Point(self.max_point.x - self.min_point.x,
+                                self.max_point.y - self.min_point.y,
+                                self.max_point.z - self.min_point.z)
         return True
 
     def addPoint(self, point):
@@ -66,4 +67,3 @@ class BBox(object):
         print(line_start + "\t diff_point =")
         self.diff_point.outputInfo(info_level + 1)
         return True
-

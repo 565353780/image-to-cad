@@ -6,8 +6,11 @@ from quaternion import quaternion
 
 from image_to_cad.Method.matrix import make_M_from_tqs
 
+
 class Trans(object):
-    def __init__(self, translation=[0.0, 0.0, 0.0],
+
+    def __init__(self,
+                 translation=[0.0, 0.0, 0.0],
                  rotation=[0.0, 0.0, 0.0, 1.0],
                  scale=[1.0, 1.0, 1.0]):
         self.translation = np.array(translation)
@@ -16,18 +19,14 @@ class Trans(object):
         return
 
     def getTransMatrix(self):
-        trans_matrix = make_M_from_tqs(
-            self.translation.tolist(),
-            self.rotation.tolist(),
-            self.scale.tolist())
+        trans_matrix = make_M_from_tqs(self.translation.tolist(),
+                                       self.rotation.tolist(),
+                                       self.scale.tolist())
         return trans_matrix
 
     def getQuaternion(self):
-        quat = quaternion(
-            self.rotation[0],
-            self.rotation[1],
-            self.rotation[2],
-            self.rotation[3])
+        quat = quaternion(self.rotation[0], self.rotation[1], self.rotation[2],
+                          self.rotation[3])
         return quat
 
     def outputInfo(self, info_level=0):
@@ -38,4 +37,3 @@ class Trans(object):
         print(line_start + "\t rotation =", self.rotation)
         print(line_start + "\t scale =", self.scale)
         return True
-
