@@ -2,18 +2,20 @@
 # -*- coding: utf-8 -*-
 
 import sys
+
 sys.path.append("../habitat-sim-manage")
-
-from getch import getch
-
 from habitat_sim_manage.Data.point import Point
 from habitat_sim_manage.Data.rad import Rad
 from habitat_sim_manage.Data.pose import Pose
 from habitat_sim_manage.Module.sim_manager import SimManager
 
+from getch import getch
+
 from image_to_cad.Module.roca_detector import ROCADetector
 
+
 class ROCASimDetector(ROCADetector):
+
     def __init__(self):
         super(ROCASimDetector, self).__init__()
         self.sim_manager = SimManager()
@@ -33,24 +35,15 @@ class ROCASimDetector(ROCADetector):
         return self.sim_manager.setControlMode(control_mode)
 
     def detectObservations(self):
-        if self.scene_name is None:
-            print("[ERROR][ROCASimDetector::detectObservations]")
-            print("\t scene_name is None!")
-            return False
+        assert self.scene_name is not None
 
         observations = self.sim_manager.sim_loader.observations
 
-        if "color_sensor" not in observations.keys():
-            print("[ERROR][ROCASimDetector::detectObservations]")
-            print("\t color_sensor observation not exist!")
-            return False
+        assert "color_sensor" in observations.keys()
 
         rgb_obs = observations["color_sensor"]
         rgb_obs = rgb_obs[..., 0:3]
-        if not self.detectImage(rgb_obs):
-            print("[ERROR][ROCASimDetector::detectObservations]")
-            print("\t detectImage failed!")
-            return False
+        assert self.detectImage(rgb_obs)
         return True
 
     def startKeyBoardControlRender(self, wait_val):
@@ -64,8 +57,8 @@ class ROCASimDetector(ROCADetector):
             self.sim_manager.cv_renderer.waitKey(wait_val)
 
             agent_state = self.sim_manager.sim_loader.getAgentState()
-            print("agent_state: position", agent_state.position,
-                  "rotation", agent_state.rotation)
+            print("agent_state: position", agent_state.position, "rotation",
+                  agent_state.rotation)
 
             input_key = getch()
             if input_key == "x":
@@ -76,6 +69,7 @@ class ROCASimDetector(ROCADetector):
                 break
         self.sim_manager.cv_renderer.close()
         return True
+
 
 def demo_roca():
     scene_name = "scene0474_02"
@@ -101,9 +95,11 @@ def demo_roca():
 
     for name in scene_name_dict.keys():
         scene_name = scene_name_dict[name]
-        roca_sim_detector.detectImageFromPath('assets/' + name + '.jpg', scene_name)
+        roca_sim_detector.detectImageFromPath('assets/' + name + '.jpg',
+                                              scene_name)
         roca_sim_detector.renderResult()
     return True
+
 
 def demo_roca_sim():
     scene_name = "scene0474_02"
@@ -133,11 +129,12 @@ def demo_roca_sim():
     roca_sim_detector.startKeyBoardControlRender(wait_val)
     return True
 
+
 def demo():
     #  demo_roca()
     demo_roca_sim()
     return True
 
+
 if __name__ == '__main__':
     demo()
-
