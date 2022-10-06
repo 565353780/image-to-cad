@@ -55,8 +55,7 @@ def load_models(d: dict, cad_root: str):
             format(cad_root, cat_id, cad_id)
         )
         if obj_path in cache:
-            mesh = cache[obj_path]
-            mesh = mesh.clone()  # Copy
+            mesh = cache[obj_path].clone()
         else:
             mesh = load_mesh(obj_path)
             cache[obj_path] = mesh.clone()
