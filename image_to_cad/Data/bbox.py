@@ -3,7 +3,7 @@
 
 from copy import deepcopy
 
-from habitat_sim_manage.Data.point import Point
+from image_to_cad.Data.point import Point
 
 inf = float("inf")
 
@@ -20,6 +20,14 @@ class BBox(object):
 
         self.updateDiffPoint()
         return
+
+    @classmethod
+    def fromList(cls, bbox_list):
+        bbox = cls(Point.fromList(bbox_list[0]), Point.fromList(bbox_list[1]))
+        return bbox
+
+    def toList(self):
+        return [self.min_point.toList(), self.max_point.toList()]
 
     def isValid(self):
         if self.min_point.x == inf:
@@ -55,6 +63,15 @@ class BBox(object):
         self.addPoint(bbox.min_point)
         self.addPoint(bbox.max_point)
         self.updateDiffPoint()
+        return True
+
+    def isInBBox(self, point):
+        if point.x < self.min_point.x or point.x > self.max_point.x:
+            return False
+        if point.y < self.min_point.y or point.y > self.max_point.y:
+            return False
+        if point.z < self.min_point.z or point.z > self.max_point.z:
+            return False
         return True
 
     def outputInfo(self, info_level=0):
