@@ -1,4 +1,4 @@
-# ROCA: Robust CAD Model Alignment and Retrieval from a Single Image
+# Image To CAD
 
 ## Source
 
@@ -20,13 +20,6 @@ Data/Images.zip
 Data/Rendering.zip
 ```
 
-and create a link
-
-```bash
-ln -s <path-to-Models-folder> ./Models
-ln -s <path-to-Data-folder> ./Dataset
-```
-
 ## Install
 
 ### Simple
@@ -35,15 +28,6 @@ ln -s <path-to-Data-folder> ./Dataset
 conda create -n roca python=3.8 -y
 conda activate roca
 ./setup.sh
-```
-
-## Install habitat-sim
-
-```bash
-git clone https://github.com/565353780/habitat-sim-manage.git ../habitat_sim_manage
-sudo apt install libassimp5 libassimp-dev libassimp-doc
-conda install habitat-sim -c conda-forge -c aihabitat
-pip install numpy, matplotlib
 ```
 
 ## Run
