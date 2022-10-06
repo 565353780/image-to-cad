@@ -75,9 +75,9 @@ def demo_roca():
     scene_name = "scene0474_02"
 
     roca_settings = {
-        "model_path": "./Models/model_best.pth",
-        "data_dir": "./Dataset/Dataset/",
-        "config_path": "./Models/config.yaml",
+        "model_path": "/home/chli/chLi/ROCA/Models/model_best.pth",
+        "data_dir": "/home/chli/chLi/ROCA/Data/Dataset/",
+        "config_path": "/home/chli/chLi/ROCA/Models/config.yaml",
         "wild": False,
         "output_dir": "none",
     }
@@ -109,9 +109,9 @@ def demo_roca_sim():
     wait_val = 1
 
     roca_settings = {
-        "model_path": "./Models/model_best.pth",
-        "data_dir": "./Dataset/Dataset/",
-        "config_path": "./Models/config.yaml",
+        "model_path": "/home/chli/chLi/ROCA/Models/model_best.pth",
+        "data_dir": "/home/chli/chLi/ROCA/Data/Dataset/",
+        "config_path": "/home/chli/chLi/ROCA/Models/config.yaml",
         "wild": False,
         "output_dir": "none",
     }
@@ -134,7 +134,3 @@ def demo():
     #  demo_roca()
     demo_roca_sim()
     return True
-
-
-if __name__ == '__main__':
-    demo()

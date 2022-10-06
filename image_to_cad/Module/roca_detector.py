@@ -12,7 +12,9 @@ from multiprocessing import Process
 
 from image_to_cad.Module.roca_predictor import Predictor
 
+
 class ROCADetector(object):
+
     def __init__(self):
         self.predictor = None
         self.to_file = None
@@ -40,11 +42,9 @@ class ROCADetector(object):
         return True
 
     def loadSettings(self, roca_settings):
-        self.predictor = Predictor(
-            roca_settings["data_dir"],
-            roca_settings["model_path"],
-            roca_settings["config_path"]
-        )
+        self.predictor = Predictor(roca_settings["data_dir"],
+                                   roca_settings["model_path"],
+                                   roca_settings["config_path"])
 
         self.to_file = roca_settings["output_dir"] != "none"
         return True
@@ -67,14 +67,14 @@ class ROCADetector(object):
 
         self.image = np.asarray(self.image)
 
-        self.instances, self.cad_ids = self.predictor(
-            self.image, scene=self.scene_name)
+        self.instances, self.cad_ids = self.predictor(self.image,
+                                                      scene=self.scene_name)
 
-        self.meshes = self.predictor.output_to_mesh(
-            self.instances, self.cad_ids,
-            excluded_classes=(),
-            as_open3d=not self.to_file,
-            nms_3d=False)
+        self.meshes = self.predictor.output_to_mesh(self.instances,
+                                                    self.cad_ids,
+                                                    excluded_classes=(),
+                                                    as_open3d=not self.to_file,
+                                                    nms_3d=False)
 
         self.masked_image = None
 
@@ -82,10 +82,8 @@ class ROCADetector(object):
         mask = ids > 0
         self.masked_image = self.image.copy()
         self.masked_image[mask] = np.clip(
-            0.8 * rendering[mask] * 255 + 0.2 * self.masked_image[mask],
-            0,
-            255
-        ).astype(np.uint8)
+            0.8 * rendering[mask] * 255 + 0.2 * self.masked_image[mask], 0,
+            255).astype(np.uint8)
         return True
 
     def detectImage(self, image, scene_name=None):
@@ -168,13 +166,14 @@ class ROCADetector(object):
         self.save_idx += 1
         return True
 
+
 def demo():
     scene_name = "scene0474_02"
 
     roca_settings = {
-        "model_path": "./Models/model_best.pth",
-        "data_dir": "./Dataset/Dataset/",
-        "config_path": "./Models/config.yaml",
+        "model_path": "/home/chli/chLi/ROCA/Models/model_best.pth",
+        "data_dir": "/home/chli/chLi/ROCA/Data/Dataset/",
+        "config_path": "/home/chli/chLi/ROCA/Models/config.yaml",
         "output_dir": "none",
     }
 
@@ -196,7 +195,3 @@ def demo():
         result = roca_detector.getResultDict()
         roca_detector.renderResultWithProcess()
     return True
-
-if __name__ == '__main__':
-    demo()
-
