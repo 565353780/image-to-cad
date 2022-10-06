@@ -1,6 +1,11 @@
 cd ..
+git clone git@github.com:565353780/habitat-sim-manage.git
 git clone --recursive https://github.com/cangumeli/Scan2CADRasterizer.git
-cd Scan2CADRasterizer
+
+cd habitat-sim-manage
+./dev_setup.sh
+
+cd ../Scan2CADRasterizer
 pip install .
 
 pip install dataclasses opencv-python numpy-quaternion \
