@@ -150,6 +150,20 @@ class ROCATrainer(object):
     def train_step(self):
         data = next(self._data_loader_iter)
 
+        print(len(data))
+        print(data[0]['file_name'])
+        print(data[0]['height'])
+        print(data[0]['width'])
+        print(data[0]['image_id'])
+        print(data[0]['scene'])
+        image = data[0]['image'].numpy().transpose(1, 2, 0)
+        image_depth = data[0]['image_depth'].numpy().reshape(360, 480)
+        print(image.shape)
+        print(image_depth.shape)
+        instances = data[0]['instances']
+        gt_pos_cads = instances.gt_pos_cads.numpy()
+        print(gt_pos_cads.shape)
+
         with EventStorage(self.iter) as self.storage:
             data = self.model(data)
 
