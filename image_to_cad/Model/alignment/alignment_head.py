@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-
 import torch
 import torch.nn as nn
 import detectron2.layers as L
