@@ -14,10 +14,15 @@ from image_to_cad.Method.directions import \
 from image_to_cad.Method.bboxes import getOpen3DBBox, \
     getBBoxFromOpen3DBBox, getOpen3DBBoxFromBBox
 
+
 class Instance(object):
+
     def __init__(self,
-                 class_id=-1, score=0, trans=Trans(),
-                 cad_id="", mesh=None):
+                 class_id=-1,
+                 score=0,
+                 trans=Trans(),
+                 cad_id="",
+                 mesh=None):
         self.class_id = int(class_id)
         self.score = float(score)
         self.trans = trans
@@ -116,4 +121,3 @@ class Instance(object):
         print(line_start + "\t cad_id=", self.cad_id)
         self.trans.outputInfo(info_level + 1)
         return True
-
