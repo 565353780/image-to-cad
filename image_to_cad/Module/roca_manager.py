@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 import sys
+import open3d as o3d
 
 sys.path.append("../habitat-sim-manage/")
 
@@ -20,6 +22,8 @@ class ROCAManager(object):
     def __init__(self):
         self.roca_sim_detector = ROCASimDetector()
         self.roca_merger = ROCAMerger()
+
+        self.scene_name = None
         return
 
     def reset(self):
@@ -32,6 +36,7 @@ class ROCAManager(object):
                                                    glb_file_path)
 
     def updateSceneName(self, scene_name):
+        self.scene_name = scene_name
         return self.roca_sim_detector.updateSceneName(scene_name)
 
     def setControlMode(self, control_mode):
@@ -42,6 +47,19 @@ class ROCAManager(object):
         self.roca_merger.addResult(
             result_dict,
             self.roca_sim_detector.sim_manager.pose_controller.pose)
+        return True
+
+    def saveRetrievalResult(self):
+        save_folder_path = "./output/retrieval/" + self.scene_name + "/"
+        os.makedirs(save_folder_path, exist_ok=True)
+
+        mesh_list = self.roca_merger.getInstanceSetListMeanMeshList()
+
+        for i, mesh in enumerate(mesh_list):
+            mesh.compute_vertex_normals()
+
+            save_file_path = save_folder_path + str(i) + ".ply"
+            o3d.io.write_triangle_mesh(save_file_path, mesh)
         return True
 
     def startKeyBoardControlRender(self, wait_val):
@@ -61,13 +79,15 @@ class ROCAManager(object):
                   agent_state.rotation)
 
             input_key = getch()
-            if input_key == "x":
+            if input_key == "v":
                 self.roca_sim_detector.detectObservations()
                 self.convertResult()
                 #  self.roca_sim_detector.renderResultWithProcess(render_3d=False)
                 #  self.roca_merger.renderResultList3DWithProcess()
                 self.roca_merger.renderInstanceSetList3DWithProcess()
                 self.roca_merger.renderInstanceSetListMean3DWithProcess()
+                continue
+            if input_key == "x":
                 continue
             if not self.roca_sim_detector.sim_manager.keyBoardControl(
                     input_key):
@@ -85,7 +105,7 @@ def demo():
         'scene0300_00', 'scene0569_00'
     ]
 
-    scene_name = valid_scene_name_list[1]
+    scene_name = valid_scene_name_list[0]
     glb_file_path = scannet_glb_dataset_folder_path + scene_name + "/" + scene_name + "_vh_clean.glb"
     control_mode = "pose"
     wait_val = 1
