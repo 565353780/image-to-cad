@@ -8,6 +8,7 @@ from copy import deepcopy
 from habitat_sim_manage.Data.point import Point
 from habitat_sim.utils.common import quat_rotate_vector
 
+
 def getDiffList(point_1, point_2):
     x_diff, y_diff, z_diff = None, None, None
     if isinstance(point_1, Point):
@@ -20,21 +21,25 @@ def getDiffList(point_1, point_2):
         z_diff = point_1[2] - point_2[2]
     return [x_diff, y_diff, z_diff]
 
+
 def getPointDist2(point_1, point_2):
     x_diff, y_diff, z_diff = getDiffList(point_1, point_2)
     point_dist2 = x_diff * x_diff + y_diff * y_diff + z_diff * z_diff
     return point_dist2
+
 
 def getPointDist(point_1, point_2):
     point_dist2 = getPointDist2(point_1, point_2)
     point_dist = sqrt(point_dist2)
     return point_dist
 
+
 def getQuaternionDist(quaternion_1, quaternion_2):
     direction_1 = quat_rotate_vector(quaternion_1, [0, 0, 1])
     direction_2 = quat_rotate_vector(quaternion_2, [0, 0, 1])
     quaternion_dist = getPointDist2(direction_1, direction_2)
     return quaternion_dist
+
 
 def getTransDist(trans_1, trans_2):
     translation_dist = getPointDist2(trans_1.translation, trans_2.translation)
@@ -48,10 +53,12 @@ def getTransDist(trans_1, trans_2):
     trans_dist = translation_dist + rotation_dist + scale_dist
     return trans_dist
 
+
 def getInstanceDist(instance_1, instance_2):
     trans_dist = getTransDist(instance_1.world_trans, instance_2.world_trans)
     instance_dist = trans_dist
     return instance_dist
+
 
 def getMatchListFromMatrix(matrix):
     inf = float("inf")
@@ -66,7 +73,7 @@ def getMatchListFromMatrix(matrix):
         if matrix_min_value > 1:
             break
 
-        min_idx = np.where(matrix_copy==matrix_min_value)
+        min_idx = np.where(matrix_copy == matrix_min_value)
         row = min_idx[0][0]
         col = min_idx[1][0]
 
@@ -81,9 +88,8 @@ def getMatchListFromMatrix(matrix):
         match_list.append([row, col])
         match_value_list.append(matrix_copy[row][col])
 
-        matrix_copy[row, :] = float("inf")
-        matrix_copy[:, col] = float("inf")
+        matrix_copy[row, :] = inf
+        matrix_copy[:, col] = inf
 
         matrix_min_value = np.min(matrix_copy)
     return match_list
-
