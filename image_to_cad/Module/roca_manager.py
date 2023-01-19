@@ -77,9 +77,16 @@ class ROCAManager(object):
 
 
 def demo():
-    scene_name = "scene0474_02"
-    glb_file_path = \
-        "/home/chli/chLi/ScanNet/scans/scene0474_02/scene0474_02_vh_clean.glb"
+    scannet_glb_dataset_folder_path = "/home/chli/chLi/ScanNet/glb/"
+
+    valid_scene_name_list = [
+        'scene0474_02', 'scene0000_01', 'scene0667_01', 'scene0500_00',
+        'scene0247_01', 'scene0644_00', 'scene0231_01', 'scene0653_00',
+        'scene0300_00', 'scene0569_00'
+    ]
+
+    scene_name = valid_scene_name_list[1]
+    glb_file_path = scannet_glb_dataset_folder_path + scene_name + "/" + scene_name + "_vh_clean.glb"
     control_mode = "pose"
     wait_val = 1
 
