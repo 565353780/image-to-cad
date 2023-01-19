@@ -134,6 +134,10 @@ class RetrievalHead(nn.Module):
         return cad_ids, pred_indices
 
     def forward(self, data):
+        num_instances = sum(data['predictions']['alignment_instance_sizes'])
+        if not self.training and num_instances == 0:
+            return data
+
         if not self.training and not self.has_cads:
             print("[WARN][RetrievalHead::forward]")
             print("\t self.has_cads is False!")
